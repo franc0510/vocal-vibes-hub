@@ -1,10 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Search, Play, Pause, User } from "lucide-react";
+import { Search, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { useRef } from "react";
-import WaveformVisualizer from "@/components/WaveformVisualizer";
 
 interface UserResult {
   id: string;
@@ -35,41 +33,24 @@ const formatTime = (dateStr: string) => {
   return `${Math.floor(hrs / 24)}d`;
 };
 
-const PostItem = ({ post }: { post: PostResult }) => {
-  const [playing, setPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+const PostItem = ({ post, onClick }: { post: PostResult; onClick: () => void }) => {
   const waveform = useRef(generateWaveform()).current;
 
-  const toggle = () => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio(post.audio_url);
-      audioRef.current.onended = () => setPlaying(false);
-    }
-    if (playing) audioRef.current.pause();
-    else audioRef.current.play();
-    setPlaying(!playing);
-  };
-
   return (
-    <motion.div
+    <motion.button
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex items-center gap-3 bg-card rounded-xl p-3 border border-border/50"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 bg-card rounded-xl p-3 border border-border/50 text-left hover:bg-primary/5 transition-colors"
     >
-      <button
-        onClick={toggle}
-        className="w-10 h-10 rounded-full gradient-red flex items-center justify-center text-primary-foreground shrink-0 shadow-red"
-      >
-        {playing ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
-      </button>
+      <div className="w-10 h-10 rounded-full gradient-red flex items-center justify-center text-primary-foreground shrink-0 shadow-red">
+        <Play size={16} className="ml-0.5" />
+      </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-foreground truncate">{post.title}</p>
         <p className="text-[10px] text-muted-foreground">{post.author_name} · {formatTime(post.created_at)} · {formatDuration(post.duration)}</p>
-        <div className="h-5 mt-1">
-          <WaveformVisualizer bars={waveform} isPlaying={playing} size="sm" />
-        </div>
       </div>
-    </motion.div>
+    </motion.button>
   );
 };
 
@@ -195,7 +176,7 @@ const SearchPage = () => {
           <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Voice Stories</h2>
           <div className="space-y-2">
             {posts.map((p) => (
-              <PostItem key={p.id} post={p} />
+              <PostItem key={p.id} post={p} onClick={() => navigate(`/post/${p.id}`)} />
             ))}
           </div>
         </div>
