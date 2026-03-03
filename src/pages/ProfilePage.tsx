@@ -27,7 +27,7 @@ const ProfilePage = () => {
       const { error: updateError } = await supabase.from("profiles").update({ avatar_url: publicUrl } as any).eq("id", user.id);
       if (updateError) throw updateError;
       await refreshProfile();
-      toast.success("Photo de profil mise à jour !");
+      toast.success("Profile picture updated!");
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -41,10 +41,9 @@ const ProfilePage = () => {
 
   return (
     <div className="min-h-screen pb-24 px-4 pt-4">
-      {/* Header */}
       <header className="flex items-center justify-between mb-4">
         <h1 className="text-lg font-bold font-display text-foreground">
-          @{profile?.username || user?.email?.split("@")[0] || "monprofil"}
+          @{profile?.username || user?.email?.split("@")[0] || "myprofile"}
         </h1>
         <div className="flex items-center gap-2">
           <button onClick={signOut} className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
@@ -56,7 +55,6 @@ const ProfilePage = () => {
         </div>
       </header>
 
-      {/* Profile info row */}
       <div className="flex items-center gap-5 mb-4">
         <div className="relative group">
           {profile?.avatar_url ? (
@@ -74,7 +72,7 @@ const ProfilePage = () => {
         <div className="flex flex-1 justify-around">
           <div className="text-center">
             <p className="text-lg font-bold font-display text-foreground">{userPosts.length}</p>
-            <p className="text-xs text-muted-foreground">Vocaux</p>
+            <p className="text-xs text-muted-foreground">Voices</p>
           </div>
           <div className="text-center">
             <p className="text-lg font-bold font-display text-foreground">1.2k</p>
@@ -87,13 +85,11 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Name & bio */}
       <div className="mb-4">
-        <p className="text-sm font-bold text-foreground">{profile?.display_name || "Mon Profil"}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{profile?.bio || "Passionné de vocaux 🎤"}</p>
+        <p className="text-sm font-bold text-foreground">{profile?.display_name || "My Profile"}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{profile?.bio || "Voice enthusiast 🎤"}</p>
       </div>
 
-      {/* Posts grid */}
       <div className="grid grid-cols-3 gap-1">
         {userPosts.map((post) => (
           <button
@@ -109,7 +105,6 @@ const ProfilePage = () => {
         ))}
       </div>
 
-      {/* Zoom modal */}
       <AnimatePresence>
         {selectedPost && (
           <motion.div

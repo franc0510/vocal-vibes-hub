@@ -1,8 +1,12 @@
-import VoiceCard from "@/components/VoiceCard";
-import { mockPosts } from "@/lib/mockData";
+import { useState } from "react";
 import { Heart } from "lucide-react";
+import VoiceCard from "@/components/VoiceCard";
+import NotificationsPanel from "@/components/NotificationsPanel";
+import { mockPosts } from "@/lib/mockData";
 
 const FeedPage = () => {
+  const [notifOpen, setNotifOpen] = useState(false);
+
   return (
     <div className="min-h-screen pb-24">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 pt-4 pb-3">
@@ -10,13 +14,18 @@ const FeedPage = () => {
           <div className="flex-1" />
           <h1 className="text-2xl font-bold font-display text-gradient-red">VocMe</h1>
           <div className="flex-1 flex justify-end">
-            <button className="w-10 h-10 rounded-xl bg-card border border-border/50 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors relative shadow-card">
+            <button
+              onClick={() => setNotifOpen(true)}
+              className="w-10 h-10 rounded-xl bg-card border border-border/50 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors relative shadow-card"
+            >
               <Heart size={18} />
               <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary" />
             </button>
           </div>
         </div>
       </header>
+
+      <NotificationsPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
 
       <main className="px-4 space-y-4 mt-3">
         {mockPosts.map((post, i) => (
