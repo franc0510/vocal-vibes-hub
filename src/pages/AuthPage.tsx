@@ -53,7 +53,7 @@ const AuthPage = () => {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-sm"
       >
-        <h1 className="text-3xl font-bold font-display text-gradient-coral text-center mb-2">Vocalo</h1>
+        <h1 className="text-3xl font-bold font-display text-gradient-red text-center mb-2">Vocalo</h1>
         <p className="text-muted-foreground text-center text-sm mb-8">
           {isLogin ? "Content de te revoir 👋" : "Rejoins la communauté 🎤"}
         </p>
