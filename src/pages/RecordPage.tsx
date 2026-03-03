@@ -32,47 +32,46 @@ const RecordPage = () => {
   const progress = elapsed / MAX_DURATION;
 
   return (
-    <div className="min-h-screen pb-24 px-4 pt-4 flex flex-col">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold font-display text-gradient-red">VocMe</h1>
-        <p className="text-sm text-muted-foreground mt-1">Raconte ton anecdote du jour (45s max)</p>
+    <div className="h-screen pb-20 px-4 pt-4 flex flex-col">
+      <header className="mb-2">
+        <h1 className="text-xl font-bold font-display text-gradient-red text-center">VocMe</h1>
       </header>
 
       {/* Daily prompt */}
-      <div className="gradient-red-soft rounded-xl p-4 mb-8 border border-primary/10">
-        <p className="text-sm font-medium text-foreground">💡 Sujet du jour :</p>
-        <p className="text-base font-display font-bold text-foreground mt-1">
+      <div className="gradient-red-soft rounded-xl p-3 mb-3 border border-primary/10">
+        <p className="text-xs font-medium text-foreground">💡 Sujet du jour :</p>
+        <p className="text-sm font-display font-bold text-foreground mt-0.5">
           Ton moment le plus gênant aujourd'hui ?
         </p>
       </div>
 
       {/* Record area */}
-      <div className="flex-1 flex flex-col items-center justify-center">
+      <div className="flex-1 flex flex-col items-center justify-center min-h-0">
         {/* Timer */}
-        <div className="mb-4 text-center">
-          <span className="text-3xl font-display font-bold text-foreground">
+        <div className="mb-2 text-center">
+          <span className="text-2xl font-display font-bold text-foreground">
             {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, "0")}
           </span>
-          <span className="text-lg text-muted-foreground"> / 0:45</span>
+          <span className="text-sm text-muted-foreground"> / 0:45</span>
         </div>
 
         {/* Progress ring */}
-        <div className="relative mb-6">
-          <svg width="160" height="160" className="transform -rotate-90">
-            <circle cx="80" cy="80" r="72" fill="none" stroke="hsl(var(--secondary))" strokeWidth="4" />
+        <div className="relative mb-3">
+          <svg width="130" height="130" className="transform -rotate-90">
+            <circle cx="65" cy="65" r="58" fill="none" stroke="hsl(var(--secondary))" strokeWidth="3" />
             <circle
-              cx="80" cy="80" r="72" fill="none"
+              cx="65" cy="65" r="58" fill="none"
               stroke="hsl(var(--primary))"
-              strokeWidth="4"
+              strokeWidth="3"
               strokeLinecap="round"
-              strokeDasharray={`${2 * Math.PI * 72}`}
-              strokeDashoffset={`${2 * Math.PI * 72 * (1 - progress)}`}
+              strokeDasharray={`${2 * Math.PI * 58}`}
+              strokeDashoffset={`${2 * Math.PI * 58 * (1 - progress)}`}
               className="transition-all duration-1000"
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-16">
-              <WaveformVisualizer bars={fakeBars} isPlaying={isRecording} size="lg" color={isRecording ? "coral" : "muted"} />
+            <div className="h-12">
+              <WaveformVisualizer bars={fakeBars} isPlaying={isRecording} size="md" color={isRecording ? "coral" : "muted"} />
             </div>
           </div>
         </div>
@@ -81,15 +80,15 @@ const RecordPage = () => {
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setIsRecording(!isRecording)}
-          className="relative"
+          className="relative mb-2"
         >
-          <div className={`w-20 h-20 rounded-full flex items-center justify-center transition-colors ${
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
             isRecording ? "bg-primary" : "gradient-red shadow-red"
           }`}>
             {isRecording ? (
-              <Square size={28} className="text-primary-foreground" />
+              <Square size={24} className="text-primary-foreground" />
             ) : (
-              <Mic size={32} className="text-primary-foreground" />
+              <Mic size={28} className="text-primary-foreground" />
             )}
           </div>
           {isRecording && (
@@ -101,21 +100,21 @@ const RecordPage = () => {
           )}
         </motion.button>
 
-        <p className="text-sm text-muted-foreground mt-4">
-          {isRecording ? `Enregistrement... ${MAX_DURATION - elapsed}s restantes` : "Appuie pour enregistrer"}
+        <p className="text-xs text-muted-foreground mb-3">
+          {isRecording ? `${MAX_DURATION - elapsed}s restantes` : "Appuie pour enregistrer"}
         </p>
 
         {/* Title input */}
         <input
           type="text"
-          placeholder="Donne un titre à ton anecdote..."
-          className="mt-8 w-full max-w-sm bg-card border border-border/50 rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50 transition-shadow shadow-card"
+          placeholder="Titre de ton anecdote..."
+          className="w-full max-w-xs bg-card border border-border/50 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50 transition-shadow shadow-card mb-3"
         />
 
         {/* Publish */}
-        <button className="mt-4 gradient-red text-primary-foreground px-8 py-3 rounded-xl font-medium shadow-red flex items-center gap-2 hover:opacity-90 transition-opacity">
-          <Send size={18} />
-          Publier mon anecdote
+        <button className="gradient-red text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium shadow-red flex items-center gap-2 hover:opacity-90 transition-opacity">
+          <Send size={16} />
+          Publier
         </button>
       </div>
     </div>

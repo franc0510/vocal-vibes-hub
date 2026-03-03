@@ -99,21 +99,21 @@ const RealItem = ({ post }: { post: VoicePost }) => {
         ))}
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-8">
+      {/* Actions – right side like Instagram */}
+      <div className="absolute right-4 bottom-1/4 flex flex-col items-center gap-6">
         <button onClick={toggleLike} className="flex flex-col items-center gap-1">
           <motion.div whileTap={{ scale: 1.4 }}>
-            <Heart size={24} className={liked ? "fill-primary text-primary" : "text-muted-foreground"} />
+            <Heart size={26} className={liked ? "fill-primary text-primary" : "text-foreground"} />
           </motion.div>
           <span className={`text-xs ${liked ? "text-primary" : "text-muted-foreground"}`}>{formatCount(likeCount)}</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-muted-foreground">
-          <MessageCircle size={24} />
-          <span className="text-xs">{formatCount(post.comments)}</span>
+        <button className="flex flex-col items-center gap-1 text-foreground">
+          <MessageCircle size={26} />
+          <span className="text-xs text-muted-foreground">{formatCount(post.comments)}</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-muted-foreground">
-          <Share2 size={24} />
-          <span className="text-xs">{formatCount(post.shares)}</span>
+        <button className="flex flex-col items-center gap-1 text-foreground">
+          <Share2 size={26} />
+          <span className="text-xs text-muted-foreground">{formatCount(post.shares)}</span>
         </button>
       </div>
     </div>
@@ -125,7 +125,6 @@ const RealsViewer = () => {
   const [reals, setReals] = useState<VoicePost[]>(() =>
     Array.from({ length: 10 }, (_, i) => generateReal(i))
   );
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const goNext = useCallback(() => {
     setCurrentIndex((i) => {
@@ -152,20 +151,10 @@ const RealsViewer = () => {
 
   return (
     <div
-      ref={containerRef}
-      className="h-[calc(100vh-8rem)] relative overflow-hidden rounded-2xl bg-card border border-primary/10 shadow-card"
+      className="h-full w-full relative overflow-hidden bg-background"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {currentIndex > 0 && (
-        <button onClick={goPrev} className="absolute top-4 left-1/2 -translate-x-1/2 z-20 text-primary/40 hover:text-primary transition-colors">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 15l-6-6-6 6"/></svg>
-        </button>
-      )}
-      <button onClick={goNext} className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 text-primary/40 hover:text-primary transition-colors">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
-      </button>
-
       <AnimatePresence mode="wait">
         <motion.div
           key={currentIndex}
@@ -178,21 +167,6 @@ const RealsViewer = () => {
           <RealItem post={reals[currentIndex]} />
         </motion.div>
       </AnimatePresence>
-
-      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20">
-        {reals.slice(Math.max(0, currentIndex - 3), currentIndex + 4).map((_, i) => {
-          const realIdx = Math.max(0, currentIndex - 3) + i;
-          return (
-            <button
-              key={realIdx}
-              onClick={() => setCurrentIndex(realIdx)}
-              className={`w-1.5 rounded-full transition-all ${
-                realIdx === currentIndex ? "h-6 bg-primary" : "h-1.5 bg-primary/25"
-              }`}
-            />
-          );
-        })}
-      </div>
     </div>
   );
 };
