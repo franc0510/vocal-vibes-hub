@@ -14,6 +14,7 @@ import MessagesPage from "@/pages/MessagesPage";
 import AuthPage from "@/pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { useDailyNotification } from "@/hooks/useDailyNotification";
 
 const queryClient = new QueryClient();
 
@@ -31,7 +32,9 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const AppRoutes = () => (
+const AppRoutes = () => {
+  useDailyNotification();
+  return (
   <div className="max-w-lg mx-auto relative">
     <Routes>
       <Route path="/auth" element={<AuthRoute><AuthPage /></AuthRoute>} />
@@ -46,7 +49,8 @@ const AppRoutes = () => (
     </Routes>
     <ProtectedNavWrapper />
   </div>
-);
+  );
+};
 
 const ProtectedNavWrapper = () => {
   const { user } = useAuth();
