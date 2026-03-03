@@ -16,6 +16,7 @@ export interface VoicePostWithAuthor {
     name: string;
     username: string;
     avatar: string;
+    avatarUrl?: string;
   };
   isLiked: boolean;
 }
@@ -73,6 +74,7 @@ export const useVoicePosts = () => {
           name: profile?.display_name || "User",
           username: profile?.username ? `@${profile.username}` : "@user",
           avatar: initials,
+          avatarUrl: profile?.avatar_url || undefined,
         },
         isLiked: likedPostIds.has(p.id),
       };
