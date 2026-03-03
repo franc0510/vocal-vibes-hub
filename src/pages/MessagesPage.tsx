@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Send, ArrowLeft, Search } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -23,9 +24,10 @@ interface Message {
 
 const MessagesPage = () => {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const [selectedName, setSelectedName] = useState("");
+  const [selectedUser, setSelectedUser] = useState<string | null>(searchParams.get("user"));
+  const [selectedName, setSelectedName] = useState(searchParams.get("name") || "");
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");

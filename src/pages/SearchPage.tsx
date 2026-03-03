@@ -169,6 +169,7 @@ const SearchPage = () => {
                   key={u.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
+                  onClick={() => navigate(`/messages?user=${u.id}&name=${encodeURIComponent(u.display_name || "User")}`)}
                   className="w-full flex items-center gap-3 bg-card rounded-xl p-3 border border-border/50 hover:bg-primary/5 transition-colors text-left"
                 >
                   {u.avatar_url ? (
