@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, LogOut, Camera, Loader2, X, Play } from "lucide-react";
-import WaveformVisualizer from "@/components/WaveformVisualizer";
+import VoiceCard from "@/components/VoiceCard";
 import { mockPosts, type VoicePost } from "@/lib/mockData";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +13,6 @@ const ProfilePage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedPost, setSelectedPost] = useState<VoicePost | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,7 +98,7 @@ const ProfilePage = () => {
         {userPosts.map((post) => (
           <button
             key={post.id}
-            onClick={() => { setSelectedPost(post); setIsPlaying(false); }}
+            onClick={() => setSelectedPost(post)}
             className="aspect-square bg-card border border-border/30 rounded-md flex flex-col items-center justify-center p-2 hover:bg-primary/5 transition-colors"
           >
             <div className="w-8 h-8 rounded-full gradient-red flex items-center justify-center mb-1">
@@ -117,44 +116,20 @@ const ProfilePage = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex items-center justify-center p-6"
+            className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setSelectedPost(null)}
           >
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
-              className="bg-card rounded-2xl p-6 w-full max-w-sm shadow-card border border-border/50"
+              className="w-full max-w-sm relative"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-base font-bold font-display text-foreground flex-1 pr-2">{selectedPost.title}</h3>
-                <button onClick={() => setSelectedPost(null)} className="text-muted-foreground hover:text-foreground">
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="flex flex-col items-center gap-4">
-                <motion.div
-                  className="w-24 h-24 rounded-full gradient-red flex items-center justify-center cursor-pointer shadow-red"
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setIsPlaying(!isPlaying)}
-                >
-                  <div className="w-20 h-20 rounded-full bg-card flex items-center justify-center">
-                    {isPlaying ? (
-                      <WaveformVisualizer bars={selectedPost.waveform.slice(0, 12)} isPlaying size="md" color="coral" />
-                    ) : (
-                      <Play size={28} className="text-primary ml-1" />
-                    )}
-                  </div>
-                </motion.div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{selectedPost.author.name}</span>
-                  <span>·</span>
-                  <span>{selectedPost.duration}s</span>
-                  <span>·</span>
-                  <span>{selectedPost.createdAt}</span>
-                </div>
-              </div>
+              <button onClick={() => setSelectedPost(null)} className="absolute -top-10 right-0 text-muted-foreground hover:text-foreground z-10">
+                <X size={24} />
+              </button>
+              <VoiceCard post={selectedPost} index={0} />
             </motion.div>
           </motion.div>
         )}
