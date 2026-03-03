@@ -1,4 +1,4 @@
-import { Home, Mic, MessageCircle, User } from "lucide-react";
+import { Home, Mic, MessageCircle, User, Search } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -12,6 +12,7 @@ const BottomNav = () => {
   ];
 
   const rightItems = [
+    { icon: Search, label: "Search", path: "/search" },
     { icon: User, label: "Profile", path: "/profile" },
   ];
 
