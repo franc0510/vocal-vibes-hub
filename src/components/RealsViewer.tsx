@@ -181,10 +181,10 @@ const RealsViewer = () => {
   const [shareOpen, setShareOpen] = useState(false);
 
   const goNext = useCallback(() => {
-    setCurrentIndex((i) => Math.min(i + 1, posts.length - 1));
+    setCurrentIndex((i) => (i + 1) % posts.length);
   }, [posts.length]);
 
-  const goPrev = () => setCurrentIndex((i) => Math.max(i - 1, 0));
+  const goPrev = () => setCurrentIndex((i) => (i - 1 + posts.length) % posts.length);
 
   const touchStartY = useRef(0);
   const handleTouchStart = (e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY; };
