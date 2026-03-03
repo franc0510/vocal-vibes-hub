@@ -83,17 +83,16 @@ const RealItem = ({ post, onCommentsOpen }: { post: VoicePostWithAuthor; onComme
 
   return (
     <div className="h-full w-full relative overflow-hidden flex flex-col">
-      {/* Background — avatar blurred */}
-      {avatarUrl && (
+      {/* Background — large avatar */}
+      {avatarUrl ? (
         <div className="absolute inset-0 z-0">
-          <img src={avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover scale-110" />
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-3xl" />
+          <img src={avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background/90" />
         </div>
-      )}
-      {!avatarUrl && (
+      ) : (
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 gradient-red opacity-10" />
-          <div className="absolute inset-0 bg-background/70" />
+          <div className="absolute inset-0 gradient-red opacity-15" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/50 to-background/85" />
         </div>
       )}
 
