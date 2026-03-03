@@ -1,10 +1,11 @@
-import { Home, Radio, Mic, User } from "lucide-react";
+import { Home, Radio, Mic, MessageCircle, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const navItems = [
   { icon: Home, label: "Feed", path: "/" },
   { icon: Radio, label: "Reals", path: "/reals" },
   { icon: Mic, label: "Publier", path: "/record", accent: true },
+  { icon: MessageCircle, label: "Messages", path: "/messages" },
   { icon: User, label: "Profil", path: "/profile" },
 ];
 
