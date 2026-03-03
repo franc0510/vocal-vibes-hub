@@ -4,9 +4,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 const navItems = [
   { icon: Home, label: "Feed", path: "/" },
   { icon: Flame, label: "Reals", path: "/reals" },
-  { icon: Mic, label: "Raconter", path: "/record", accent: true },
+  { icon: Mic, label: "Record", path: "/record", accent: true },
   { icon: MessageCircle, label: "Messages", path: "/messages" },
-  { icon: User, label: "Profil", path: "/profile" },
+  { icon: User, label: "Profile", path: "/profile" },
 ];
 
 const BottomNav = () => {

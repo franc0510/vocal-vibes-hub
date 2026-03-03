@@ -19,7 +19,7 @@ const AuthPage = () => {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success("Connecté !");
+        toast.success("Logged in!");
       } else {
         const { error } = await supabase.auth.signUp({
           email,
@@ -30,7 +30,7 @@ const AuthPage = () => {
           },
         });
         if (error) throw error;
-        toast.success("Vérifie ton email pour confirmer ton compte !");
+        toast.success("Check your email to confirm your account!");
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -55,10 +55,9 @@ const AuthPage = () => {
       >
         <h1 className="text-3xl font-bold font-display text-gradient-red text-center mb-2">VocMe</h1>
         <p className="text-muted-foreground text-center text-sm mb-8">
-          {isLogin ? "Content de te revoir 👋" : "Rejoins la communauté 🎤"}
+          {isLogin ? "Welcome back 👋" : "Join the community 🎤"}
         </p>
 
-        {/* OAuth buttons */}
         <div className="flex gap-3 mb-6">
           <button
             onClick={() => handleOAuth("google")}
@@ -78,7 +77,7 @@ const AuthPage = () => {
 
         <div className="flex items-center gap-3 mb-6">
           <div className="flex-1 h-px bg-border" />
-          <span className="text-xs text-muted-foreground">ou par email</span>
+          <span className="text-xs text-muted-foreground">or by email</span>
           <div className="flex-1 h-px bg-border" />
         </div>
 
@@ -88,7 +87,7 @@ const AuthPage = () => {
               <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Nom d'affichage"
+                placeholder="Display name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 className="w-full bg-secondary rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50"
@@ -110,7 +109,7 @@ const AuthPage = () => {
             <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="password"
-              placeholder="Mot de passe"
+              placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -124,14 +123,14 @@ const AuthPage = () => {
             className="w-full gradient-coral text-primary-foreground py-3 rounded-xl font-medium shadow-coral flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {loading && <Loader2 size={18} className="animate-spin" />}
-            {isLogin ? "Se connecter" : "Créer mon compte"}
+            {isLogin ? "Log in" : "Create account"}
           </button>
         </form>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          {isLogin ? "Pas encore de compte ?" : "Déjà un compte ?"}{" "}
+          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
           <button onClick={() => setIsLogin(!isLogin)} className="text-primary font-medium">
-            {isLogin ? "Inscription" : "Connexion"}
+            {isLogin ? "Sign up" : "Log in"}
           </button>
         </p>
       </motion.div>

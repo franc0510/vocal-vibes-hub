@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { Send, ArrowLeft, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
 
 interface Conversation {
   user_id: string;
@@ -33,7 +32,6 @@ const MessagesPage = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Load conversations
   useEffect(() => {
     if (!user) return;
     loadConversations();
@@ -41,7 +39,6 @@ const MessagesPage = () => {
 
   const loadConversations = async () => {
     if (!user) return;
-    // Get all messages involving user, grouped by other user
     const { data } = await supabase
       .from("messages")
       .select("*")
@@ -56,7 +53,7 @@ const MessagesPage = () => {
       if (!convMap.has(otherId)) {
         convMap.set(otherId, {
           user_id: otherId,
-          last_message: msg.content || "🎤 Vocal",
+          last_message: msg.content || "🎤 Voice",
           last_at: msg.created_at,
           unread: msg.receiver_id === user.id && !msg.read ? 1 : 0,
         });
@@ -65,7 +62,6 @@ const MessagesPage = () => {
       }
     }
 
-    // Fetch profiles
     const ids = Array.from(convMap.keys());
     if (ids.length > 0) {
       const { data: profiles } = await supabase
@@ -76,13 +72,12 @@ const MessagesPage = () => {
       const convs: Conversation[] = ids.map((id) => {
         const c = convMap.get(id);
         const p = profiles?.find((pr: any) => pr.id === id);
-        return { ...c, display_name: p?.display_name || "Utilisateur", avatar_url: p?.avatar_url };
+        return { ...c, display_name: p?.display_name || "User", avatar_url: p?.avatar_url };
       });
       setConversations(convs);
     }
   };
 
-  // Load messages for selected user
   useEffect(() => {
     if (!user || !selectedUser) return;
     const load = async () => {
@@ -95,7 +90,6 @@ const MessagesPage = () => {
         .order("created_at", { ascending: true });
       setMessages((data as Message[]) || []);
 
-      // Mark as read
       await supabase
         .from("messages")
         .update({ read: true } as any)
@@ -105,7 +99,6 @@ const MessagesPage = () => {
     };
     load();
 
-    // Subscribe to realtime
     const channel = supabase
       .channel(`messages-${selectedUser}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
@@ -158,7 +151,6 @@ const MessagesPage = () => {
   if (selectedUser) {
     return (
       <div className="min-h-screen pb-24 flex flex-col">
-        {/* Chat header */}
         <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-3 flex items-center gap-3 border-b border-border/50">
           <button onClick={() => setSelectedUser(null)} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft size={22} />
@@ -169,7 +161,6 @@ const MessagesPage = () => {
           <span className="font-medium text-foreground">{selectedName}</span>
         </header>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {messages.map((msg) => (
             <motion.div
@@ -192,12 +183,11 @@ const MessagesPage = () => {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
         <div className="sticky bottom-20 px-4 py-3 bg-background/80 backdrop-blur-xl border-t border-border/50">
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Ton message..."
+              placeholder="Your message..."
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
@@ -222,12 +212,11 @@ const MessagesPage = () => {
         <h1 className="text-2xl font-bold font-display text-gradient-red">Messages</h1>
       </header>
 
-      {/* Search users */}
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
-          placeholder="Chercher un utilisateur..."
+          placeholder="Search users..."
           value={searchQuery}
           onChange={(e) => searchUsers(e.target.value)}
           className="w-full bg-secondary rounded-xl pl-10 pr-4 py-3 text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50"
@@ -237,24 +226,23 @@ const MessagesPage = () => {
             {searchResults.map((u: any) => (
               <button
                 key={u.id}
-                onClick={() => selectConversation(u.id, u.display_name || "Utilisateur")}
+                onClick={() => selectConversation(u.id, u.display_name || "User")}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors"
               >
                 <div className="w-8 h-8 rounded-full gradient-coral flex items-center justify-center text-xs font-bold text-primary-foreground">
                   {(u.display_name || "U").slice(0, 2).toUpperCase()}
                 </div>
-                <span className="text-sm text-foreground">{u.display_name || "Utilisateur"}</span>
+                <span className="text-sm text-foreground">{u.display_name || "User"}</span>
               </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* Conversations */}
       <div className="space-y-2">
         {conversations.length === 0 && (
           <p className="text-center text-muted-foreground text-sm py-12">
-            Aucune conversation. Cherche un utilisateur pour démarrer !
+            No conversations yet. Search for a user to start chatting!
           </p>
         )}
         {conversations.map((conv) => (
@@ -272,7 +260,7 @@ const MessagesPage = () => {
               <div className="flex items-center justify-between">
                 <span className="font-medium text-sm text-foreground">{conv.display_name}</span>
                 <span className="text-xs text-muted-foreground">
-                  {new Date(conv.last_at).toLocaleDateString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(conv.last_at).toLocaleDateString("en-US", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               </div>
               <p className="text-sm text-muted-foreground truncate">{conv.last_message}</p>

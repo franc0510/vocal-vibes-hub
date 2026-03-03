@@ -6,15 +6,15 @@ export interface VoicePost {
     avatar: string;
   };
   title: string;
-  duration: number; // seconds, max 45
-  waveform: number[]; // normalized 0-1
+  duration: number;
+  waveform: number[];
   likes: number;
   comments: number;
   shares: number;
   isLiked: boolean;
   createdAt: string;
   isPlaying?: boolean;
-  reactions: Record<string, number>; // emoji -> count
+  reactions: Record<string, number>;
 }
 
 export const REACTION_EMOJIS = ["😂", "😱", "🔥", "💀", "❤️", "👏"] as const;
@@ -34,79 +34,79 @@ export const mockPosts: VoicePost[] = [
   {
     id: "1",
     author: { name: "Léa Martin", username: "@leamartin", avatar: "LM" },
-    title: "J'ai renversé mon café sur mon boss ce matin 😂☕",
+    title: "Spilled my coffee on my boss this morning 😂☕",
     duration: 38,
     waveform: generateWaveform(32),
     likes: 234,
     comments: 18,
     shares: 5,
     isLiked: false,
-    createdAt: "Il y a 2h",
+    createdAt: "2h ago",
     reactions: randomReactions(),
   },
   {
     id: "2",
     author: { name: "Karim Benzar", username: "@kbenzar", avatar: "KB" },
-    title: "La fois où j'ai rencontré Zidane au supermarché 😂",
+    title: "The time I met Zidane at the supermarket 😂",
     duration: 44,
     waveform: generateWaveform(32),
     likes: 1823,
     comments: 142,
     shares: 89,
     isLiked: true,
-    createdAt: "Il y a 5h",
+    createdAt: "5h ago",
     reactions: randomReactions(),
   },
   {
     id: "3",
     author: { name: "Sophie Dubois", username: "@sophied", avatar: "SD" },
-    title: "Mon voisin m'a confondu avec sa femme… 🫣",
+    title: "My neighbor mistook me for his wife… 🫣",
     duration: 29,
     waveform: generateWaveform(32),
     likes: 567,
     comments: 45,
     shares: 32,
     isLiked: false,
-    createdAt: "Il y a 8h",
+    createdAt: "8h ago",
     reactions: randomReactions(),
   },
   {
     id: "4",
     author: { name: "Lucas Petit", username: "@lucasp", avatar: "LP" },
-    title: "Premier jour de stage — j'ai appelé le directeur 'papa' 😬",
+    title: "First day of internship — I called the director 'dad' 😬",
     duration: 28,
     waveform: generateWaveform(32),
     likes: 89,
     comments: 12,
     shares: 2,
     isLiked: false,
-    createdAt: "Il y a 12h",
+    createdAt: "12h ago",
     reactions: randomReactions(),
   },
   {
     id: "5",
     author: { name: "Amina Youssef", username: "@aminay", avatar: "AY" },
-    title: "Comment j'ai failli rater mon avion pour le Japon ✈️",
+    title: "How I almost missed my flight to Japan ✈️",
     duration: 45,
     waveform: generateWaveform(32),
     likes: 2341,
     comments: 203,
     shares: 156,
     isLiked: true,
-    createdAt: "Il y a 1j",
+    createdAt: "1d ago",
     reactions: randomReactions(),
   },
   {
     id: "6",
     author: { name: "Thomas Roux", username: "@tomroux", avatar: "TR" },
-    title: "Le livreur a livré 50 pizzas chez moi par erreur 🍕",
+    title: "The delivery guy brought 50 pizzas to my door by mistake 🍕",
     duration: 41,
     waveform: generateWaveform(32),
     likes: 891,
     comments: 76,
     shares: 45,
     isLiked: false,
-    createdAt: "Il y a 1j",
+    createdAt: "1d ago",
     reactions: randomReactions(),
   },
 ];
@@ -115,40 +115,40 @@ export const mockReals: VoicePost[] = [
   {
     id: "r1",
     author: { name: "Jade Chen", username: "@jadechen", avatar: "JC" },
-    title: "Le bruit que fait mon chat quand il voit un oiseau 🐱",
+    title: "The noise my cat makes when it sees a bird 🐱",
     duration: 15,
     waveform: generateWaveform(32),
     likes: 4521,
     comments: 89,
     shares: 234,
     isLiked: false,
-    createdAt: "Il y a 30min",
+    createdAt: "30m ago",
     reactions: randomReactions(),
   },
   {
     id: "r2",
     author: { name: "Omar Diallo", username: "@omardiallo", avatar: "OD" },
-    title: "Mon voisin chante sous la douche 😂🎤",
+    title: "My neighbor sings in the shower 😂🎤",
     duration: 12,
     waveform: generateWaveform(32),
     likes: 8923,
     comments: 456,
     shares: 678,
     isLiked: true,
-    createdAt: "Il y a 1h",
+    createdAt: "1h ago",
     reactions: randomReactions(),
   },
   {
     id: "r3",
     author: { name: "Clara Fontaine", username: "@claraf", avatar: "CF" },
-    title: "J'ai marché dans une porte vitrée devant tout le monde 💀",
+    title: "Walked straight into a glass door in front of everyone 💀",
     duration: 18,
     waveform: generateWaveform(32),
     likes: 3456,
     comments: 67,
     shares: 123,
     isLiked: false,
-    createdAt: "Il y a 3h",
+    createdAt: "3h ago",
     reactions: randomReactions(),
   },
 ];
