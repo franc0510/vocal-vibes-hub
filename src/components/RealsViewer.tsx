@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, MessageCircle, Share2, Play, Pause } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, Pause, Trash2 } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
 import CommentsPanel from "./CommentsPanel";
 import SharePanel from "./SharePanel";
@@ -26,7 +26,7 @@ const formatTime = (dateStr: string) => {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-const RealItem = ({ post, onCommentsOpen, onShareOpen }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void }) => {
+const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void }) => {
   const { user } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
@@ -159,13 +159,23 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen }: { post: VoicePostWithAu
           </div>
           <span className="text-[10px] text-muted-foreground font-medium">Share</span>
         </button>
+
+        {user && user.id === post.user_id && (
+          <button onClick={onDelete} className="flex flex-col items-center gap-1">
+            <div className="w-11 h-11 rounded-full bg-destructive/20 backdrop-blur-sm border border-destructive/30 flex items-center justify-center">
+              <Trash2 size={20} className="text-destructive" />
+            </div>
+            <span className="text-[10px] text-destructive font-medium">Suppr.</span>
+          </button>
+        )}
       </div>
     </div>
   );
 };
 
 const RealsViewer = () => {
-  const { posts, loading } = useVoicePosts();
+  const { user } = useAuth();
+  const { posts, loading, refetch } = useVoicePosts();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -182,6 +192,18 @@ const RealsViewer = () => {
     const diff = touchStartY.current - e.changedTouches[0].clientY;
     if (diff > 50) goNext();
     else if (diff < -50) goPrev();
+  };
+
+  const handleDelete = async () => {
+    const post = posts[currentIndex];
+    if (!post || !user || user.id !== post.user_id) return;
+    const confirmed = window.confirm("Supprimer ce vocal ? Tu pourras en republier un aujourd'hui.");
+    if (!confirmed) return;
+    const { error } = await supabase.from("voice_posts").delete().eq("id", post.id);
+    if (error) { toast.error("Erreur lors de la suppression"); return; }
+    toast.success("Vocal supprimé !");
+    if (currentIndex >= posts.length - 1) setCurrentIndex(Math.max(0, currentIndex - 1));
+    refetch();
   };
 
   if (loading) {
@@ -218,7 +240,7 @@ const RealsViewer = () => {
           transition={{ duration: 0.3 }}
           className="h-full"
         >
-          <RealItem post={currentPost} onCommentsOpen={() => setCommentsOpen(true)} onShareOpen={() => setShareOpen(true)} />
+          <RealItem post={currentPost} onCommentsOpen={() => setCommentsOpen(true)} onShareOpen={() => setShareOpen(true)} onDelete={handleDelete} />
         </motion.div>
       </AnimatePresence>
 
