@@ -37,8 +37,8 @@ async function setupNativeNotification() {
     notifications: [
       {
         id: NOTIFICATION_ID,
-        title: "🎙️ C'est l'heure de ton vocal !",
-        body: "Raconte ton anecdote du jour sur VocMe avant qu'il ne soit trop tard !",
+        title: "It's time ! HopHopHop your anecdote 🎙️",
+        body: "Partage ton anecdote du jour sur VocMe !",
         schedule: {
           on: { hour: 18, minute: 0 },
           every: "day",
@@ -62,8 +62,8 @@ async function setupWebNotification() {
   const checkAndNotify = () => {
     const now = new Date();
     if (now.getHours() === 18 && now.getMinutes() === 0) {
-      new Notification("🎙️ C'est l'heure de ton vocal !", {
-        body: "Raconte ton anecdote du jour sur VocMe !",
+      new Notification("It's time ! HopHopHop your anecdote 🎙️", {
+        body: "Partage ton anecdote du jour sur VocMe !",
         icon: "/favicon.ico",
       });
     }
