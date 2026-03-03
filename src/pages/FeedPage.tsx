@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Heart } from "lucide-react";
 import VoiceCard from "@/components/VoiceCard";
 import NotificationsPanel from "@/components/NotificationsPanel";
-import { mockPosts } from "@/lib/mockData";
+import { useVoicePosts } from "@/hooks/useVoicePosts";
 
 const FeedPage = () => {
   const [notifOpen, setNotifOpen] = useState(false);
+  const { posts, loading } = useVoicePosts();
 
   return (
     <div className="min-h-screen pb-24">
@@ -28,9 +29,20 @@ const FeedPage = () => {
       <NotificationsPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
 
       <main className="px-4 space-y-4 mt-3">
-        {mockPosts.map((post, i) => (
-          <VoiceCard key={post.id} post={post} index={i} />
-        ))}
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-lg font-display font-bold text-foreground mb-1">No stories yet</p>
+            <p className="text-sm text-muted-foreground">Be the first to share a voice story!</p>
+          </div>
+        ) : (
+          posts.map((post, i) => (
+            <VoiceCard key={post.id} post={post} index={i} />
+          ))
+        )}
       </main>
     </div>
   );

@@ -2,17 +2,18 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, LogOut, Camera, Loader2, X, Play } from "lucide-react";
 import VoiceCard from "@/components/VoiceCard";
-import { mockPosts, type VoicePost } from "@/lib/mockData";
 import { useAuth } from "@/contexts/AuthContext";
+import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const ProfilePage = () => {
   const { user, profile, signOut, refreshProfile } = useAuth();
-  const userPosts = mockPosts;
+  const { posts } = useVoicePosts();
+  const userPosts = posts.filter((p) => p.user_id === user?.id);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<VoicePost | null>(null);
+  const [selectedPost, setSelectedPost] = useState<VoicePostWithAuthor | null>(null);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -75,11 +76,11 @@ const ProfilePage = () => {
             <p className="text-xs text-muted-foreground">Voices</p>
           </div>
           <div className="text-center">
-            <p className="text-lg font-bold font-display text-foreground">1.2k</p>
+            <p className="text-lg font-bold font-display text-foreground">0</p>
             <p className="text-xs text-muted-foreground">Followers</p>
           </div>
           <div className="text-center">
-            <p className="text-lg font-bold font-display text-foreground">389</p>
+            <p className="text-lg font-bold font-display text-foreground">0</p>
             <p className="text-xs text-muted-foreground">Following</p>
           </div>
         </div>
@@ -90,20 +91,26 @@ const ProfilePage = () => {
         <p className="text-xs text-muted-foreground mt-0.5">{profile?.bio || "Voice enthusiast 🎤"}</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-1">
-        {userPosts.map((post) => (
-          <button
-            key={post.id}
-            onClick={() => setSelectedPost(post)}
-            className="aspect-square bg-card border border-border/30 rounded-md flex flex-col items-center justify-center p-2 hover:bg-primary/5 transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full gradient-red flex items-center justify-center mb-1">
-              <Play size={14} className="text-primary-foreground ml-0.5" />
-            </div>
-            <p className="text-[10px] text-foreground font-medium text-center line-clamp-2 leading-tight">{post.title}</p>
-          </button>
-        ))}
-      </div>
+      {userPosts.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground text-sm">No stories yet. Record your first one!</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-1">
+          {userPosts.map((post) => (
+            <button
+              key={post.id}
+              onClick={() => setSelectedPost(post)}
+              className="aspect-square bg-card border border-border/30 rounded-md flex flex-col items-center justify-center p-2 hover:bg-primary/5 transition-colors"
+            >
+              <div className="w-8 h-8 rounded-full gradient-red flex items-center justify-center mb-1">
+                <Play size={14} className="text-primary-foreground ml-0.5" />
+              </div>
+              <p className="text-[10px] text-foreground font-medium text-center line-clamp-2 leading-tight">{post.title}</p>
+            </button>
+          ))}
+        </div>
+      )}
 
       <AnimatePresence>
         {selectedPost && (

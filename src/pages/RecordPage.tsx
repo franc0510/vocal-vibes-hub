@@ -1,15 +1,27 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Mic, Square, Send } from "lucide-react";
+import { Mic, Square, Send, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const MAX_DURATION = 45;
 
 const RecordPage = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [isRecording, setIsRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [title, setTitle] = useState("");
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [publishing, setPublishing] = useState(false);
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const fakeBars = Array.from({ length: 24 }, () => 0.15 + Math.random() * 0.85);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const fakeBars = useRef(Array.from({ length: 24 }, () => 0.15 + Math.random() * 0.85)).current;
 
   useEffect(() => {
     if (isRecording) {
@@ -17,7 +29,7 @@ const RecordPage = () => {
       intervalRef.current = setInterval(() => {
         setElapsed((prev) => {
           if (prev >= MAX_DURATION - 1) {
-            setIsRecording(false);
+            stopRecording();
             return MAX_DURATION;
           }
           return prev + 1;
@@ -28,6 +40,90 @@ const RecordPage = () => {
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [isRecording]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        setAudioBlob(blob);
+        stream.getTracks().forEach((t) => t.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setAudioBlob(null);
+    } catch {
+      toast.error("Microphone access denied");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) stopRecording();
+    else startRecording();
+  };
+
+  const handlePublish = async () => {
+    if (!user) {
+      toast.error("You need to sign in first");
+      navigate("/auth");
+      return;
+    }
+    if (!audioBlob) {
+      toast.error("Record something first!");
+      return;
+    }
+    if (!title.trim()) {
+      toast.error("Add a title to your story");
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const fileName = `${user.id}/${Date.now()}.webm`;
+      const { error: uploadError } = await supabase.storage
+        .from("audio")
+        .upload(fileName, audioBlob, { contentType: "audio/webm" });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from("audio").getPublicUrl(fileName);
+
+      const { error: insertError } = await supabase.from("voice_posts").insert({
+        user_id: user.id,
+        title: title.trim(),
+        audio_url: urlData.publicUrl,
+        duration: elapsed,
+      });
+
+      if (insertError) throw insertError;
+
+      toast.success("Published! 🎉");
+      setTitle("");
+      setAudioBlob(null);
+      setElapsed(0);
+      navigate("/");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to publish");
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const progress = elapsed / MAX_DURATION;
 
@@ -74,7 +170,7 @@ const RecordPage = () => {
 
         <motion.button
           whileTap={{ scale: 0.9 }}
-          onClick={() => setIsRecording(!isRecording)}
+          onClick={toggleRecording}
           className="relative mb-2"
         >
           <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
@@ -96,18 +192,24 @@ const RecordPage = () => {
         </motion.button>
 
         <p className="text-xs text-muted-foreground mb-3">
-          {isRecording ? `${MAX_DURATION - elapsed}s remaining` : "Tap to record"}
+          {isRecording ? `${MAX_DURATION - elapsed}s remaining` : audioBlob ? "Ready to publish!" : "Tap to record"}
         </p>
 
         <input
           type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
           placeholder="Give your story a title..."
           className="w-full max-w-xs bg-card border border-border/50 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50 transition-shadow shadow-card mb-3"
         />
 
-        <button className="gradient-red text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium shadow-red flex items-center gap-2 hover:opacity-90 transition-opacity">
-          <Send size={16} />
-          Publish
+        <button
+          onClick={handlePublish}
+          disabled={publishing || !audioBlob || !title.trim()}
+          className="gradient-red text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium shadow-red flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {publishing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          {publishing ? "Publishing..." : "Publish"}
         </button>
       </div>
     </div>
