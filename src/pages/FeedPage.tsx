@@ -11,7 +11,7 @@ const FeedPage = () => {
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 pt-4 pb-3">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h1 className="text-2xl font-bold font-display text-gradient-red">Vocalo</h1>
+            <h1 className="text-2xl font-bold font-display text-gradient-red">VocMe</h1>
             <p className="text-xs text-muted-foreground">Les meilleures anecdotes du jour 🎤</p>
           </div>
           <div className="flex items-center gap-3">

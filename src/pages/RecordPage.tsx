@@ -34,7 +34,7 @@ const RecordPage = () => {
   return (
     <div className="min-h-screen pb-24 px-4 pt-4 flex flex-col">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold font-display text-gradient-red">Publier</h1>
+        <h1 className="text-2xl font-bold font-display text-gradient-red">VocMe</h1>
         <p className="text-sm text-muted-foreground mt-1">Raconte ton anecdote du jour (45s max)</p>
       </header>
 

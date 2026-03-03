@@ -51,7 +51,7 @@ const ProfilePage = () => {
   return (
     <div className="min-h-screen pb-24 px-4 pt-4">
       <header className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold font-display text-gradient-red">Profil</h1>
+        <h1 className="text-2xl font-bold font-display text-gradient-red">VocMe</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={signOut}
