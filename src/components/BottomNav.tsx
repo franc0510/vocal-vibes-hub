@@ -1,9 +1,9 @@
-import { Home, Radio, Mic, MessageCircle, User } from "lucide-react";
+import { Home, Mic, MessageCircle, User, Flame } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const navItems = [
   { icon: Home, label: "Feed", path: "/" },
-  { icon: Radio, label: "Reals", path: "/reals" },
+  { icon: Flame, label: "Reals", path: "/reals" },
   { icon: Mic, label: "Raconter", path: "/record", accent: true },
   { icon: MessageCircle, label: "Messages", path: "/messages" },
   { icon: User, label: "Profil", path: "/profile" },
@@ -38,10 +38,7 @@ const BottomNav = () => {
               onClick={() => navigate(item.path)}
               className="flex flex-col items-center gap-1 py-2 px-3"
             >
-              <Icon
-                size={22}
-                className={isActive ? "text-primary" : "text-muted-foreground"}
-              />
+              <Icon size={22} className={isActive ? "text-primary" : "text-muted-foreground"} />
               <span className={`text-[10px] font-medium ${isActive ? "text-primary" : "text-muted-foreground"}`}>
                 {item.label}
               </span>
