@@ -1,43 +1,61 @@
 import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, MessageCircle, Share2, Play } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, Pause } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
-import { mockReals, type VoicePost, REACTION_EMOJIS } from "@/lib/mockData";
+import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const generateWaveform = (length: number): number[] =>
   Array.from({ length }, () => 0.15 + Math.random() * 0.85);
 
-const generateReal = (index: number): VoicePost => {
-  const base = mockReals[index % mockReals.length];
-  return {
-    ...base,
-    id: `r-${index}`,
-    waveform: generateWaveform(32),
-    likes: Math.floor(Math.random() * 10000),
-    comments: Math.floor(Math.random() * 500),
-    shares: Math.floor(Math.random() * 300),
-    isLiked: Math.random() > 0.5,
-    reactions: Object.fromEntries(
-      REACTION_EMOJIS.filter(() => Math.random() > 0.4).map((e) => [e, Math.floor(Math.random() * 200)])
-    ),
-  };
-};
-
 const formatCount = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString());
 
-const RealItem = ({ post }: { post: VoicePost }) => {
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [liked, setLiked] = useState(post.isLiked);
-  const [likeCount, setLikeCount] = useState(post.likes);
-  const [reactions, setReactions] = useState(post.reactions);
+const formatTime = (dateStr: string) => {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
 
-  const toggleLike = () => {
-    setLiked(!liked);
-    setLikeCount((c) => (liked ? c - 1 : c + 1));
+const RealItem = ({ post }: { post: VoicePostWithAuthor }) => {
+  const { user } = useAuth();
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [liked, setLiked] = useState(post.isLiked);
+  const [likeCount, setLikeCount] = useState(post.likes_count);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const waveform = useRef(generateWaveform(16)).current;
+
+  const togglePlay = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio(post.audio_url);
+      audioRef.current.onended = () => setIsPlaying(false);
+    }
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
   };
 
-  const addReaction = (emoji: string) => {
-    setReactions((prev) => ({ ...prev, [emoji]: (prev[emoji] || 0) + 1 }));
+  const toggleLike = async () => {
+    if (!user) {
+      toast.error("Sign in to like posts");
+      return;
+    }
+    const newLiked = !liked;
+    setLiked(newLiked);
+    setLikeCount((c) => newLiked ? c + 1 : c - 1);
+
+    if (newLiked) {
+      await supabase.from("voice_post_likes").insert({ user_id: user.id, post_id: post.id });
+    } else {
+      await supabase.from("voice_post_likes").delete().eq("user_id", user.id).eq("post_id", post.id);
+    }
   };
 
   return (
@@ -47,12 +65,12 @@ const RealItem = ({ post }: { post: VoicePost }) => {
         <motion.div
           className="w-36 h-36 rounded-full gradient-red flex items-center justify-center cursor-pointer relative z-10 shadow-red"
           whileTap={{ scale: 0.95 }}
-          onClick={() => setIsPlaying(!isPlaying)}
+          onClick={togglePlay}
         >
           <div className="w-32 h-32 rounded-full bg-card flex items-center justify-center">
             <div className="w-28 h-28 rounded-full bg-primary/10 absolute" />
             {isPlaying ? (
-              <WaveformVisualizer bars={post.waveform.slice(0, 16)} isPlaying={true} size="lg" color="coral" />
+              <WaveformVisualizer bars={waveform} isPlaying={true} size="lg" color="coral" />
             ) : (
               <Play size={44} className="text-primary ml-1" />
             )}
@@ -82,24 +100,11 @@ const RealItem = ({ post }: { post: VoicePost }) => {
             {post.author.avatar}
           </div>
           <span className="text-sm text-muted-foreground">{post.author.name}</span>
+          <span className="text-xs text-muted-foreground">· {formatTime(post.created_at)}</span>
         </div>
       </div>
 
-      {/* Reactions */}
-      <div className="flex flex-wrap justify-center gap-1.5 mb-4">
-        {REACTION_EMOJIS.map((emoji) => (
-          <button
-            key={emoji}
-            onClick={() => addReaction(emoji)}
-            className="flex items-center gap-1 bg-card hover:bg-primary/10 border border-border/50 px-2.5 py-1 rounded-full text-xs transition-colors"
-          >
-            <span>{emoji}</span>
-            {reactions[emoji] ? <span className="text-muted-foreground">{reactions[emoji]}</span> : null}
-          </button>
-        ))}
-      </div>
-
-      {/* Actions – right side like Instagram */}
+      {/* Actions – right side like TikTok */}
       <div className="absolute right-4 bottom-1/4 flex flex-col items-center gap-6">
         <button onClick={toggleLike} className="flex flex-col items-center gap-1">
           <motion.div whileTap={{ scale: 1.4 }}>
@@ -109,11 +114,11 @@ const RealItem = ({ post }: { post: VoicePost }) => {
         </button>
         <button className="flex flex-col items-center gap-1 text-foreground">
           <MessageCircle size={26} />
-          <span className="text-xs text-muted-foreground">{formatCount(post.comments)}</span>
+          <span className="text-xs text-muted-foreground">{formatCount(post.comments_count)}</span>
         </button>
         <button className="flex flex-col items-center gap-1 text-foreground">
           <Share2 size={26} />
-          <span className="text-xs text-muted-foreground">{formatCount(post.shares)}</span>
+          <span className="text-xs text-muted-foreground">{formatCount(post.shares_count)}</span>
         </button>
       </div>
     </div>
@@ -121,23 +126,12 @@ const RealItem = ({ post }: { post: VoicePost }) => {
 };
 
 const RealsViewer = () => {
+  const { posts, loading } = useVoicePosts();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [reals, setReals] = useState<VoicePost[]>(() =>
-    Array.from({ length: 10 }, (_, i) => generateReal(i))
-  );
 
   const goNext = useCallback(() => {
-    setCurrentIndex((i) => {
-      const next = i + 1;
-      if (next >= reals.length - 3) {
-        setReals((prev) => [
-          ...prev,
-          ...Array.from({ length: 5 }, (_, j) => generateReal(prev.length + j)),
-        ]);
-      }
-      return next;
-    });
-  }, [reals.length]);
+    setCurrentIndex((i) => Math.min(i + 1, posts.length - 1));
+  }, [posts.length]);
 
   const goPrev = () => setCurrentIndex((i) => Math.max(i - 1, 0));
 
@@ -148,6 +142,23 @@ const RealsViewer = () => {
     if (diff > 50) goNext();
     else if (diff < -50) goPrev();
   };
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (posts.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
+        <p className="text-lg font-display font-bold text-foreground mb-1">No stories yet</p>
+        <p className="text-sm text-muted-foreground">Be the first to share a voice story!</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -164,7 +175,7 @@ const RealsViewer = () => {
           transition={{ duration: 0.3 }}
           className="h-full"
         >
-          <RealItem post={reals[currentIndex]} />
+          <RealItem post={posts[currentIndex]} />
         </motion.div>
       </AnimatePresence>
     </div>
