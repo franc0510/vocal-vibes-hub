@@ -74,6 +74,71 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_post_likes: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "voice_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voice_posts: {
+        Row: {
+          audio_url: string
+          comments_count: number
+          created_at: string
+          duration: number
+          id: string
+          likes_count: number
+          shares_count: number
+          title: string
+          user_id: string
+        }
+        Insert: {
+          audio_url: string
+          comments_count?: number
+          created_at?: string
+          duration?: number
+          id?: string
+          likes_count?: number
+          shares_count?: number
+          title: string
+          user_id: string
+        }
+        Update: {
+          audio_url?: string
+          comments_count?: number
+          created_at?: string
+          duration?: number
+          id?: string
+          likes_count?: number
+          shares_count?: number
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
