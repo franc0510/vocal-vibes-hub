@@ -80,6 +80,12 @@ export const useVoicePosts = () => {
       };
     });
 
+    // Shuffle randomly
+    for (let i = enriched.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [enriched[i], enriched[j]] = [enriched[j], enriched[i]];
+    }
+
     setPosts(enriched);
     setLoading(false);
   };
