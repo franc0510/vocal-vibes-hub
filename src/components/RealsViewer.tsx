@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Heart, MessageCircle, Share2, Play, Pause } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
 import CommentsPanel from "./CommentsPanel";
+import SharePanel from "./SharePanel";
 import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,7 +26,7 @@ const formatTime = (dateStr: string) => {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-const RealItem = ({ post, onCommentsOpen }: { post: VoicePostWithAuthor; onCommentsOpen: () => void }) => {
+const RealItem = ({ post, onCommentsOpen, onShareOpen }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void }) => {
   const { user } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
@@ -69,16 +70,8 @@ const RealItem = ({ post, onCommentsOpen }: { post: VoicePostWithAuthor; onComme
     else await supabase.from("voice_post_likes").delete().eq("user_id", user.id).eq("post_id", post.id);
   };
 
-  const handleShare = async () => {
-    const url = `${window.location.origin}/?post=${post.id}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: post.title, text: `Listen to "${post.title}" by ${post.author.name} on VocMe`, url });
-      } catch {}
-    } else {
-      await navigator.clipboard.writeText(url);
-      toast.success("Link copied!");
-    }
+  const handleShare = () => {
+    onShareOpen();
   };
 
   return (
@@ -175,6 +168,7 @@ const RealsViewer = () => {
   const { posts, loading } = useVoicePosts();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const goNext = useCallback(() => {
     setCurrentIndex((i) => Math.min(i + 1, posts.length - 1));
@@ -224,11 +218,12 @@ const RealsViewer = () => {
           transition={{ duration: 0.3 }}
           className="h-full"
         >
-          <RealItem post={currentPost} onCommentsOpen={() => setCommentsOpen(true)} />
+          <RealItem post={currentPost} onCommentsOpen={() => setCommentsOpen(true)} onShareOpen={() => setShareOpen(true)} />
         </motion.div>
       </AnimatePresence>
 
       <CommentsPanel open={commentsOpen} onClose={() => setCommentsOpen(false)} postId={currentPost?.id || ""} />
+      <SharePanel open={shareOpen} onClose={() => setShareOpen(false)} postId={currentPost?.id || ""} postTitle={currentPost?.title || ""} postAuthor={currentPost?.author.name || ""} />
     </div>
   );
 };
