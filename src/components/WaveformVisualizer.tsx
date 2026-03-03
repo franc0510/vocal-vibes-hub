@@ -10,7 +10,7 @@ interface WaveformVisualizerProps {
 const colorMap = {
   coral: "bg-primary",
   violet: "bg-accent",
-  muted: "bg-muted-foreground",
+  muted: "bg-muted-foreground/40",
 };
 
 const sizeMap = {

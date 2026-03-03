@@ -2,10 +2,8 @@ import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, MessageCircle, Share2, Play } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
-import CategoryBadge from "./CategoryBadge";
-import { mockReals, type VoicePost } from "@/lib/mockData";
+import { mockReals, type VoicePost, REACTION_EMOJIS } from "@/lib/mockData";
 
-// Generate infinite reals by cycling through mock data
 const generateWaveform = (length: number): number[] =>
   Array.from({ length }, () => 0.15 + Math.random() * 0.85);
 
@@ -19,6 +17,9 @@ const generateReal = (index: number): VoicePost => {
     comments: Math.floor(Math.random() * 500),
     shares: Math.floor(Math.random() * 300),
     isLiked: Math.random() > 0.5,
+    reactions: Object.fromEntries(
+      REACTION_EMOJIS.filter(() => Math.random() > 0.4).map((e) => [e, Math.floor(Math.random() * 200)])
+    ),
   };
 };
 
@@ -28,39 +29,44 @@ const RealItem = ({ post }: { post: VoicePost }) => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes);
+  const [reactions, setReactions] = useState(post.reactions);
 
   const toggleLike = () => {
     setLiked(!liked);
     setLikeCount((c) => (liked ? c - 1 : c + 1));
   };
 
+  const addReaction = (emoji: string) => {
+    setReactions((prev) => ({ ...prev, [emoji]: (prev[emoji] || 0) + 1 }));
+  };
+
   return (
     <div className="h-full w-full flex flex-col items-center justify-center relative px-6">
-      {/* Pulsating ring — red/white theme */}
-      <div className="relative mb-8">
+      {/* Pulsating ring */}
+      <div className="relative mb-6">
         <motion.div
-          className="w-40 h-40 rounded-full bg-gradient-to-br from-destructive to-destructive/80 flex items-center justify-center cursor-pointer relative z-10"
+          className="w-36 h-36 rounded-full gradient-red flex items-center justify-center cursor-pointer relative z-10 shadow-red"
           whileTap={{ scale: 0.95 }}
           onClick={() => setIsPlaying(!isPlaying)}
         >
-          <div className="w-36 h-36 rounded-full bg-background flex items-center justify-center">
-            <div className="w-32 h-32 rounded-full bg-destructive/20 absolute" />
+          <div className="w-32 h-32 rounded-full bg-card flex items-center justify-center">
+            <div className="w-28 h-28 rounded-full bg-primary/10 absolute" />
             {isPlaying ? (
               <WaveformVisualizer bars={post.waveform.slice(0, 16)} isPlaying={true} size="lg" color="coral" />
             ) : (
-              <Play size={48} className="text-destructive ml-1" />
+              <Play size={44} className="text-primary ml-1" />
             )}
           </div>
         </motion.div>
         {isPlaying && (
           <>
             <motion.div
-              className="absolute inset-0 rounded-full border-2 border-destructive/50"
+              className="absolute inset-0 rounded-full border-2 border-primary/40"
               animate={{ scale: [1, 1.3], opacity: [0.6, 0] }}
               transition={{ duration: 1.5, repeat: Infinity }}
             />
             <motion.div
-              className="absolute inset-0 rounded-full border-2 border-destructive/25"
+              className="absolute inset-0 rounded-full border-2 border-primary/20"
               animate={{ scale: [1, 1.5], opacity: [0.4, 0] }}
               transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
             />
@@ -69,31 +75,44 @@ const RealItem = ({ post }: { post: VoicePost }) => {
       </div>
 
       {/* Info */}
-      <div className="text-center mb-6">
-        <CategoryBadge category={post.category} />
-        <h3 className="text-xl font-bold font-display text-foreground mt-3 mb-2">{post.title}</h3>
+      <div className="text-center mb-4">
+        <h3 className="text-lg font-bold font-display text-foreground mb-2">{post.title}</h3>
         <div className="flex items-center justify-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-destructive flex items-center justify-center text-xs font-bold text-foreground">
+          <div className="w-7 h-7 rounded-full gradient-red flex items-center justify-center text-xs font-bold text-primary-foreground">
             {post.author.avatar}
           </div>
           <span className="text-sm text-muted-foreground">{post.author.name}</span>
         </div>
       </div>
 
+      {/* Reactions */}
+      <div className="flex flex-wrap justify-center gap-1.5 mb-4">
+        {REACTION_EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            onClick={() => addReaction(emoji)}
+            className="flex items-center gap-1 bg-card hover:bg-primary/10 border border-border/50 px-2.5 py-1 rounded-full text-xs transition-colors"
+          >
+            <span>{emoji}</span>
+            {reactions[emoji] ? <span className="text-muted-foreground">{reactions[emoji]}</span> : null}
+          </button>
+        ))}
+      </div>
+
       {/* Actions */}
       <div className="flex items-center gap-8">
         <button onClick={toggleLike} className="flex flex-col items-center gap-1">
           <motion.div whileTap={{ scale: 1.4 }}>
-            <Heart size={26} className={liked ? "fill-destructive text-destructive" : "text-muted-foreground"} />
+            <Heart size={24} className={liked ? "fill-primary text-primary" : "text-muted-foreground"} />
           </motion.div>
-          <span className={`text-xs ${liked ? "text-destructive" : "text-muted-foreground"}`}>{formatCount(likeCount)}</span>
+          <span className={`text-xs ${liked ? "text-primary" : "text-muted-foreground"}`}>{formatCount(likeCount)}</span>
         </button>
         <button className="flex flex-col items-center gap-1 text-muted-foreground">
-          <MessageCircle size={26} />
+          <MessageCircle size={24} />
           <span className="text-xs">{formatCount(post.comments)}</span>
         </button>
         <button className="flex flex-col items-center gap-1 text-muted-foreground">
-          <Share2 size={26} />
+          <Share2 size={24} />
           <span className="text-xs">{formatCount(post.shares)}</span>
         </button>
       </div>
@@ -111,7 +130,6 @@ const RealsViewer = () => {
   const goNext = useCallback(() => {
     setCurrentIndex((i) => {
       const next = i + 1;
-      // Load more when near end
       if (next >= reals.length - 3) {
         setReals((prev) => [
           ...prev,
@@ -124,11 +142,8 @@ const RealsViewer = () => {
 
   const goPrev = () => setCurrentIndex((i) => Math.max(i - 1, 0));
 
-  // Touch/swipe handling
   const touchStartY = useRef(0);
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-  };
+  const handleTouchStart = (e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY; };
   const handleTouchEnd = (e: React.TouchEvent) => {
     const diff = touchStartY.current - e.changedTouches[0].clientY;
     if (diff > 50) goNext();
@@ -138,17 +153,16 @@ const RealsViewer = () => {
   return (
     <div
       ref={containerRef}
-      className="h-[calc(100vh-8rem)] relative overflow-hidden rounded-2xl bg-card border border-destructive/20"
+      className="h-[calc(100vh-8rem)] relative overflow-hidden rounded-2xl bg-card border border-primary/10 shadow-card"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Navigation hints */}
       {currentIndex > 0 && (
-        <button onClick={goPrev} className="absolute top-4 left-1/2 -translate-x-1/2 z-20 text-destructive/60 hover:text-destructive transition-colors">
+        <button onClick={goPrev} className="absolute top-4 left-1/2 -translate-x-1/2 z-20 text-primary/40 hover:text-primary transition-colors">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 15l-6-6-6 6"/></svg>
         </button>
       )}
-      <button onClick={goNext} className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 text-destructive/60 hover:text-destructive transition-colors">
+      <button onClick={goNext} className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 text-primary/40 hover:text-primary transition-colors">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
       </button>
 
@@ -165,7 +179,6 @@ const RealsViewer = () => {
         </motion.div>
       </AnimatePresence>
 
-      {/* Progress dots — red theme */}
       <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20">
         {reals.slice(Math.max(0, currentIndex - 3), currentIndex + 4).map((_, i) => {
           const realIdx = Math.max(0, currentIndex - 3) + i;
@@ -174,7 +187,7 @@ const RealsViewer = () => {
               key={realIdx}
               onClick={() => setCurrentIndex(realIdx)}
               className={`w-1.5 rounded-full transition-all ${
-                realIdx === currentIndex ? "h-6 bg-destructive" : "h-1.5 bg-destructive/30"
+                realIdx === currentIndex ? "h-6 bg-primary" : "h-1.5 bg-primary/25"
               }`}
             />
           );

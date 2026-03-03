@@ -219,7 +219,7 @@ const MessagesPage = () => {
   return (
     <div className="min-h-screen pb-24 px-4 pt-4">
       <header className="mb-4">
-        <h1 className="text-2xl font-bold font-display text-gradient-coral">Messages</h1>
+        <h1 className="text-2xl font-bold font-display text-gradient-red">Messages</h1>
       </header>
 
       {/* Search users */}
