@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import FeedPage from "@/pages/FeedPage";
-import RealsPage from "@/pages/RealsPage";
+// RealsPage merged into FeedPage
 import RecordPage from "@/pages/RecordPage";
 import ProfilePage from "@/pages/ProfilePage";
 import MessagesPage from "@/pages/MessagesPage";
@@ -34,7 +34,6 @@ const AppRoutes = () => (
     <Routes>
       <Route path="/auth" element={<AuthRoute><AuthPage /></AuthRoute>} />
       <Route path="/" element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
-      <Route path="/reals" element={<ProtectedRoute><RealsPage /></ProtectedRoute>} />
       <Route path="/record" element={<ProtectedRoute><RecordPage /></ProtectedRoute>} />
       <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
