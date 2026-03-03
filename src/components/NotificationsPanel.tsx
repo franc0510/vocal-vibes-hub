@@ -62,12 +62,12 @@ const NotificationsPanel = ({ open, onClose }: NotificationsPanelProps) => {
             onClick={onClose}
           />
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-0 left-0 right-0 z-50 max-h-[80vh] bg-card border-b border-border/50 shadow-elevated overflow-y-auto rounded-b-2xl"
+            exit={{ opacity: 0, y: -10 }}
+            className="fixed top-0 left-0 right-0 bottom-0 z-50 bg-background flex flex-col max-w-lg mx-auto"
           >
-            <div className="sticky top-0 bg-card/95 backdrop-blur-sm px-4 py-3 flex items-center justify-between border-b border-border/30">
+            <div className="px-4 py-3 flex items-center justify-between border-b border-border/30">
               <h2 className="text-lg font-bold font-display text-foreground">Notifications</h2>
               <div className="flex items-center gap-3">
                 {unreadCount > 0 && (
@@ -81,39 +81,30 @@ const NotificationsPanel = ({ open, onClose }: NotificationsPanelProps) => {
               </div>
             </div>
 
-            <div className="divide-y divide-border/30">
+            <div className="flex-1 overflow-y-auto divide-y divide-border/30">
               {notifications.map((notif) => {
                 const Icon = iconMap[notif.type];
                 return (
-                  <motion.div
+                  <div
                     key={notif.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className={`flex items-start gap-3 px-4 py-3 ${!notif.read ? "bg-primary/5" : ""}`}
+                    className={`flex items-center gap-3 px-4 py-3 ${!notif.read ? "bg-primary/5" : ""}`}
                   >
-                    <div className="w-10 h-10 rounded-full gradient-red flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0">
+                    <div className="w-8 h-8 rounded-full gradient-red flex items-center justify-center text-[10px] font-bold text-primary-foreground shrink-0">
                       {notif.avatar}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground">
+                      <p className="text-xs text-foreground leading-snug">
                         <span className="font-semibold">{notif.user}</span>{" "}
                         <span className="text-muted-foreground">{actionText[notif.type]}</span>
-                        {notif.title && (
-                          <>
-                            {" "}
-                            <span className="font-medium">"{notif.title}"</span>
-                          </>
-                        )}
+                        {notif.title && <span className="font-medium"> "{notif.title}"</span>}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{notif.time}</p>
+                      <p className="text-[10px] text-muted-foreground">{notif.time}</p>
                     </div>
-                    <div className={`mt-1 ${notif.type === "like" ? "text-primary" : "text-muted-foreground"}`}>
-                      <Icon size={16} className={notif.type === "like" ? "fill-primary" : ""} />
+                    <div className={`${notif.type === "like" ? "text-primary" : "text-muted-foreground"}`}>
+                      <Icon size={14} className={notif.type === "like" ? "fill-primary" : ""} />
                     </div>
-                    {!notif.read && (
-                      <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2" />
-                    )}
-                  </motion.div>
+                    {!notif.read && <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
+                  </div>
                 );
               })}
             </div>
