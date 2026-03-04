@@ -140,6 +140,15 @@ const ProfilePage = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {user && (
+        <FollowListModal
+          open={followListType !== null}
+          onClose={() => setFollowListType(null)}
+          userId={user.id}
+          type={followListType || "followers"}
+        />
+      )}
     </div>
   );
 };
