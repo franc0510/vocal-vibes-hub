@@ -100,6 +100,7 @@ const UserProfilePage = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
 
   const { isFollowing, followersCount, followingCount, toggleFollow, loading: followLoading } = useFollows(userId);
   const isOwnProfile = currentUser?.id === userId;
