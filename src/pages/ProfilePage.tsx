@@ -16,6 +16,8 @@ const ProfilePage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedPost, setSelectedPost] = useState<VoicePostWithAuthor | null>(null);
+  const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
+  const { followersCount, followingCount } = useFollows(user?.id);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
