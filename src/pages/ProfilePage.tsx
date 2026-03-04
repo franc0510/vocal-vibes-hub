@@ -4,8 +4,10 @@ import { Settings, LogOut, Camera, Loader2, X, Play } from "lucide-react";
 import VoiceCard from "@/components/VoiceCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
+import { useFollows } from "@/hooks/useFollows";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import FollowListModal from "@/components/FollowListModal";
 
 const ProfilePage = () => {
   const { user, profile, signOut, refreshProfile } = useAuth();
