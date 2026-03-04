@@ -163,14 +163,14 @@ const UserProfilePage = () => {
             <p className="text-lg font-bold font-display text-foreground">{posts.length}</p>
             <p className="text-xs text-muted-foreground">Voices</p>
           </div>
-          <div className="text-center">
+          <button className="text-center" onClick={() => setFollowListType("followers")}>
             <p className="text-lg font-bold font-display text-foreground">{followersCount}</p>
             <p className="text-xs text-muted-foreground">Followers</p>
-          </div>
-          <div className="text-center">
+          </button>
+          <button className="text-center" onClick={() => setFollowListType("following")}>
             <p className="text-lg font-bold font-display text-foreground">{followingCount}</p>
             <p className="text-xs text-muted-foreground">Following</p>
-          </div>
+          </button>
         </div>
       </div>
 
