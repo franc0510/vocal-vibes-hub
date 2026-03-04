@@ -2,15 +2,39 @@ import { useState } from "react";
 import { Heart } from "lucide-react";
 import NotificationsPanel from "@/components/NotificationsPanel";
 import RealsViewer from "@/components/RealsViewer";
+import { useFollows } from "@/hooks/useFollows";
 
 const FeedPage = () => {
   const [notifOpen, setNotifOpen] = useState(false);
+  const [tab, setTab] = useState<"all" | "friends">("all");
+  const { followingIds } = useFollows();
 
   return (
     <div className="h-screen flex flex-col">
       <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 pt-4 pb-2">
         <div className="flex-1" />
-        <h1 className="text-xl font-bold font-display text-gradient-red">VocMe</h1>
+        <div className="flex items-center gap-1 bg-card/60 backdrop-blur-md rounded-full p-1 border border-border/30">
+          <button
+            onClick={() => setTab("all")}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+              tab === "all"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Pour toi
+          </button>
+          <button
+            onClick={() => setTab("friends")}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+              tab === "friends"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Amis
+          </button>
+        </div>
         <div className="flex-1 flex justify-end">
           <button
             onClick={() => setNotifOpen(true)}
@@ -24,7 +48,11 @@ const FeedPage = () => {
 
       <NotificationsPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
 
-      <RealsViewer />
+      <RealsViewer
+        key={tab}
+        filterFriends={tab === "friends"}
+        friendIds={followingIds}
+      />
     </div>
   );
 };

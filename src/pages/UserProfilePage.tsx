@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Play, Pause, MessageCircle, X } from "lucide-react";
+import { ArrowLeft, Play, Pause, MessageCircle, X, UserPlus, UserCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFollows } from "@/hooks/useFollows";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
 
 interface Profile {
@@ -99,9 +100,11 @@ const UserProfilePage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
+  const { isFollowing, followersCount, followingCount, toggleFollow, loading: followLoading } = useFollows(userId);
+  const isOwnProfile = currentUser?.id === userId;
+
   useEffect(() => {
     if (!userId) return;
-
     const load = async () => {
       setLoading(true);
       const [profileRes, postsRes] = await Promise.all([
@@ -133,7 +136,6 @@ const UserProfilePage = () => {
   }
 
   const initials = (profile.display_name || "U").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-  const isOwnProfile = currentUser?.id === userId;
 
   return (
     <div className="min-h-screen pb-24 px-4 pt-4">
@@ -146,7 +148,6 @@ const UserProfilePage = () => {
         </h1>
       </header>
 
-      {/* Profile info */}
       <div className="flex items-center gap-5 mb-4">
         {profile.avatar_url ? (
           <img src={profile.avatar_url} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-primary" />
@@ -161,11 +162,11 @@ const UserProfilePage = () => {
             <p className="text-xs text-muted-foreground">Voices</p>
           </div>
           <div className="text-center">
-            <p className="text-lg font-bold font-display text-foreground">0</p>
+            <p className="text-lg font-bold font-display text-foreground">{followersCount}</p>
             <p className="text-xs text-muted-foreground">Followers</p>
           </div>
           <div className="text-center">
-            <p className="text-lg font-bold font-display text-foreground">0</p>
+            <p className="text-lg font-bold font-display text-foreground">{followingCount}</p>
             <p className="text-xs text-muted-foreground">Following</p>
           </div>
         </div>
@@ -177,9 +178,20 @@ const UserProfilePage = () => {
         {profile.bio && <p className="text-xs text-muted-foreground mt-1">{profile.bio}</p>}
       </div>
 
-      {/* Action buttons */}
       {!isOwnProfile && (
         <div className="flex gap-2 mb-5">
+          <button
+            onClick={toggleFollow}
+            disabled={followLoading}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium transition-colors ${
+              isFollowing
+                ? "bg-secondary text-foreground hover:bg-secondary/80"
+                : "bg-primary text-primary-foreground hover:bg-primary/90"
+            }`}
+          >
+            {isFollowing ? <UserCheck size={16} /> : <UserPlus size={16} />}
+            {isFollowing ? "Suivi" : "Suivre"}
+          </button>
           <button
             onClick={() => navigate(`/messages?user=${userId}&name=${encodeURIComponent(profile.display_name || "User")}`)}
             className="flex-1 flex items-center justify-center gap-2 bg-secondary rounded-xl py-2.5 text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
@@ -190,7 +202,6 @@ const UserProfilePage = () => {
         </div>
       )}
 
-      {/* Posts grid */}
       {posts.length === 0 ? (
         <p className="text-center text-sm text-muted-foreground py-12">No stories yet</p>
       ) : (
