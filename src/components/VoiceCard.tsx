@@ -51,10 +51,14 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
     }
     if (isPlaying) {
       audioRef.current.pause();
+      setIsPlaying(false);
     } else {
-      audioRef.current.play();
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch(() => {
+        toast.error("Appuie à nouveau pour lancer le son");
+      });
     }
-    setIsPlaying(!isPlaying);
   };
 
   const toggleLike = async () => {
