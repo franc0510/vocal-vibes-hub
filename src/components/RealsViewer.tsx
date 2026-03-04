@@ -14,6 +14,15 @@ const generateWaveform = (length: number): number[] =>
 
 const formatCount = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString());
 
+// Generate a deterministic gradient based on a string (username/name)
+const getAvatarGradient = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const h1 = Math.abs(hash % 360);
+  const h2 = (h1 + 40 + Math.abs((hash >> 8) % 60)) % 360;
+  return `linear-gradient(135deg, hsl(${h1}, 70%, 45%), hsl(${h2}, 80%, 55%))`;
+};
+
 const formatTime = (dateStr: string) => {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
