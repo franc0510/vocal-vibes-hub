@@ -141,12 +141,6 @@ const RecordPage = () => {
         </p>
       </div>
 
-      {hasPostedToday && !isAdmin && (
-        <div className="bg-card border border-border/50 rounded-xl p-3 mb-3 text-center">
-          <p className="text-sm font-medium text-foreground">🎙️ Tu as déjà publié ton vocal du jour</p>
-          <p className="text-xs text-muted-foreground mt-1">Reviens demain pour une nouvelle anecdote !</p>
-        </div>
-      )}
 
       <div className="flex-1 flex flex-col items-center justify-center min-h-0">
         <div className="mb-2 text-center">
