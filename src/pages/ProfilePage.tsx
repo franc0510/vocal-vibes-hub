@@ -79,14 +79,14 @@ const ProfilePage = () => {
             <p className="text-lg font-bold font-display text-foreground">{userPosts.length}</p>
             <p className="text-xs text-muted-foreground">Voices</p>
           </div>
-          <div className="text-center">
-            <p className="text-lg font-bold font-display text-foreground">0</p>
+          <button className="text-center" onClick={() => setFollowListType("followers")}>
+            <p className="text-lg font-bold font-display text-foreground">{followersCount}</p>
             <p className="text-xs text-muted-foreground">Followers</p>
-          </div>
-          <div className="text-center">
-            <p className="text-lg font-bold font-display text-foreground">0</p>
+          </button>
+          <button className="text-center" onClick={() => setFollowListType("following")}>
+            <p className="text-lg font-bold font-display text-foreground">{followingCount}</p>
             <p className="text-xs text-muted-foreground">Following</p>
-          </div>
+          </button>
         </div>
       </div>
 
