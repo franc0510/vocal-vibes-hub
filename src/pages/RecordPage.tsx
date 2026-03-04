@@ -117,7 +117,7 @@ const RecordPage = () => {
       setTitle("");
       setAudioBlob(null);
       setElapsed(0);
-      setHasPostedToday(true);
+      
       navigate("/");
     } catch (err: any) {
       toast.error(err.message || "Failed to publish");
