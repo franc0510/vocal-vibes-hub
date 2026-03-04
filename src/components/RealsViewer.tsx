@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, MessageCircle, Share2, Play, Pause, Trash2 } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
@@ -26,7 +26,7 @@ const formatTime = (dateStr: string) => {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void }) => {
+const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onEnded: () => void }) => {
   const { user } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
@@ -36,8 +36,28 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: Voice
   const animRef = useRef<number>(0);
   const waveform = useRef(generateWaveform(32)).current;
 
-  // Get avatar URL from the hook data - we need to fetch it
   const avatarUrl = post.author.avatarUrl;
+
+  // Auto-play on mount
+  useEffect(() => {
+    const audio = new Audio(post.audio_url);
+    audioRef.current = audio;
+    audio.onended = () => {
+      setIsPlaying(false);
+      setProgress(0);
+      onEnded();
+    };
+    audio.play().then(() => {
+      setIsPlaying(true);
+      animRef.current = requestAnimationFrame(updateProgress);
+    }).catch(() => {});
+
+    return () => {
+      audio.pause();
+      audio.src = "";
+      cancelAnimationFrame(animRef.current);
+    };
+  }, [post.id]);
 
   const updateProgress = () => {
     if (audioRef.current) {
@@ -47,10 +67,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: Voice
   };
 
   const togglePlay = () => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio(post.audio_url);
-      audioRef.current.onended = () => { setIsPlaying(false); setProgress(0); };
-    }
+    if (!audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
       cancelAnimationFrame(animRef.current);
@@ -70,13 +87,8 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: Voice
     else await supabase.from("voice_post_likes").delete().eq("user_id", user.id).eq("post_id", post.id);
   };
 
-  const handleShare = () => {
-    onShareOpen();
-  };
-
   return (
     <div className="h-full w-full relative overflow-hidden flex flex-col">
-      {/* Background — large avatar */}
       {avatarUrl ? (
         <div className="absolute inset-0 z-0">
           <img src={avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
@@ -89,9 +101,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: Voice
         </div>
       )}
 
-      {/* Content */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-20">
-        {/* Author info top */}
         <div className="flex items-center gap-3 mb-8">
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-primary/30" />
@@ -106,28 +116,21 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: Voice
           </div>
         </div>
 
-        {/* Title */}
         <h3 className="text-xl font-bold font-display text-foreground text-center mb-8 max-w-[280px] leading-snug">
           {post.title}
         </h3>
 
-        {/* Waveform player — the star */}
         <motion.div
           className="w-full max-w-[300px] bg-card/60 backdrop-blur-md rounded-2xl p-5 border border-border/30 shadow-elevated cursor-pointer mb-4"
           whileTap={{ scale: 0.98 }}
           onClick={togglePlay}
         >
-          {/* Progress bar */}
           <div className="w-full h-1 bg-secondary rounded-full mb-4 overflow-hidden">
             <motion.div className="h-full gradient-red rounded-full" style={{ width: `${progress * 100}%` }} />
           </div>
-
-          {/* Waveform */}
           <div className="h-16 flex items-center justify-center">
             <WaveformVisualizer bars={waveform} isPlaying={isPlaying} size="lg" color="coral" />
           </div>
-
-          {/* Play button + duration */}
           <div className="flex items-center justify-between mt-4">
             <div className="w-10 h-10 rounded-full gradient-red flex items-center justify-center shadow-red">
               {isPlaying ? <Pause size={18} className="text-primary-foreground" /> : <Play size={18} className="text-primary-foreground ml-0.5" />}
@@ -137,7 +140,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: Voice
         </motion.div>
       </div>
 
-      {/* Actions — right side TikTok style */}
+      {/* Actions */}
       <div className="absolute right-4 bottom-1/3 z-10 flex flex-col items-center gap-5">
         <button onClick={toggleLike} className="flex flex-col items-center gap-1">
           <motion.div whileTap={{ scale: 1.4 }} className="w-11 h-11 rounded-full bg-card/60 backdrop-blur-sm border border-border/30 flex items-center justify-center">
@@ -153,7 +156,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: Voice
           <span className="text-[10px] text-muted-foreground font-medium">{formatCount(post.comments_count)}</span>
         </button>
 
-        <button onClick={handleShare} className="flex flex-col items-center gap-1">
+        <button onClick={onShareOpen} className="flex flex-col items-center gap-1">
           <div className="w-11 h-11 rounded-full bg-card/60 backdrop-blur-sm border border-border/30 flex items-center justify-center">
             <Share2 size={22} className="text-foreground" />
           </div>
@@ -173,18 +176,38 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete }: { post: Voice
   );
 };
 
-const RealsViewer = () => {
+interface RealsViewerProps {
+  filterFriends?: boolean;
+  friendIds?: string[];
+}
+
+const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps) => {
   const { user } = useAuth();
-  const { posts, loading, refetch } = useVoicePosts();
+  const { posts: allPosts, loading, refetch } = useVoicePosts();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
+  const posts = filterFriends
+    ? allPosts.filter((p) => friendIds.includes(p.user_id))
+    : allPosts;
+
   const goNext = useCallback(() => {
+    if (posts.length === 0) return;
     setCurrentIndex((i) => (i + 1) % posts.length);
   }, [posts.length]);
 
-  const goPrev = () => setCurrentIndex((i) => (i - 1 + posts.length) % posts.length);
+  const goPrev = () => {
+    if (posts.length === 0) return;
+    setCurrentIndex((i) => (i - 1 + posts.length) % posts.length);
+  };
+
+  // Reset index when posts change
+  useEffect(() => {
+    if (currentIndex >= posts.length && posts.length > 0) {
+      setCurrentIndex(0);
+    }
+  }, [posts.length, currentIndex]);
 
   const touchStartY = useRef(0);
   const handleTouchStart = (e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY; };
@@ -217,8 +240,12 @@ const RealsViewer = () => {
   if (posts.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center px-6 text-center">
-        <p className="text-lg font-display font-bold text-foreground mb-1">No stories yet</p>
-        <p className="text-sm text-muted-foreground">Be the first to share a voice story!</p>
+        <p className="text-lg font-display font-bold text-foreground mb-1">
+          {filterFriends ? "Aucun vocal d'amis" : "No stories yet"}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {filterFriends ? "Suis des utilisateurs pour voir leurs vocaux ici !" : "Be the first to share a voice story!"}
+        </p>
       </div>
     );
   }
@@ -233,14 +260,20 @@ const RealsViewer = () => {
     >
       <AnimatePresence mode="wait">
         <motion.div
-          key={currentIndex}
+          key={`${currentIndex}-${currentPost?.id}`}
           initial={{ y: 60, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -60, opacity: 0 }}
           transition={{ duration: 0.3 }}
           className="h-full"
         >
-          <RealItem post={currentPost} onCommentsOpen={() => setCommentsOpen(true)} onShareOpen={() => setShareOpen(true)} onDelete={handleDelete} />
+          <RealItem
+            post={currentPost}
+            onCommentsOpen={() => setCommentsOpen(true)}
+            onShareOpen={() => setShareOpen(true)}
+            onDelete={handleDelete}
+            onEnded={goNext}
+          />
         </motion.div>
       </AnimatePresence>
 
