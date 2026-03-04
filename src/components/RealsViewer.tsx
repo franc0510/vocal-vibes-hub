@@ -86,7 +86,9 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { po
       audioRef.current.pause();
       cancelAnimationFrame(animRef.current);
     } else {
-      audioRef.current.play();
+      audioRef.current.play().catch(() => {
+        toast.error("Appuie pour lancer le son");
+      });
       animRef.current = requestAnimationFrame(updateProgress);
     }
     setIsPlaying(!isPlaying);
