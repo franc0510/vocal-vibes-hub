@@ -92,10 +92,6 @@ const RecordPage = () => {
       toast.error("Add a title to your story");
       return;
     }
-    if (hasPostedToday && !isAdmin) {
-      toast.error("Tu as déjà publié ton vocal du jour ! Reviens demain 🎙️");
-      return;
-    }
 
     setPublishing(true);
     try {
