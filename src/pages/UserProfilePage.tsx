@@ -217,6 +217,15 @@ const UserProfilePage = () => {
       <AnimatePresence>
         {selectedPost && <PostPlayer post={selectedPost} onClose={() => setSelectedPost(null)} />}
       </AnimatePresence>
+
+      {userId && (
+        <FollowListModal
+          open={followListType !== null}
+          onClose={() => setFollowListType(null)}
+          userId={userId}
+          type={followListType || "followers"}
+        />
+      )}
     </div>
   );
 };
