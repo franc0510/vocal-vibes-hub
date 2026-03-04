@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFollows } from "@/hooks/useFollows";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
+import FollowListModal from "@/components/FollowListModal";
 
 interface Profile {
   id: string;
