@@ -47,7 +47,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { po
 
   const avatarUrl = post.author.avatarUrl;
 
-  // Auto-play on mount
+  // Setup audio on mount — don't auto-play (blocked on mobile)
   useEffect(() => {
     const audio = new Audio(post.audio_url);
     audioRef.current = audio;
@@ -56,10 +56,15 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { po
       setProgress(0);
       onEnded();
     };
+
+    // Try to auto-play (works on desktop, may fail on mobile)
     audio.play().then(() => {
       setIsPlaying(true);
       animRef.current = requestAnimationFrame(updateProgress);
-    }).catch(() => {});
+    }).catch(() => {
+      // Mobile blocks autoplay — user must tap to play
+      setIsPlaying(false);
+    });
 
     return () => {
       audio.pause();
