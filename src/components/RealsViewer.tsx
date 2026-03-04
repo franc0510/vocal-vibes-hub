@@ -14,6 +14,15 @@ const generateWaveform = (length: number): number[] =>
 
 const formatCount = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString());
 
+// Generate a deterministic gradient based on a string (username/name)
+const getAvatarGradient = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const h1 = Math.abs(hash % 360);
+  const h2 = (h1 + 40 + Math.abs((hash >> 8) % 60)) % 360;
+  return `linear-gradient(135deg, hsl(${h1}, 70%, 45%), hsl(${h2}, 80%, 55%))`;
+};
+
 const formatTime = (dateStr: string) => {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -38,7 +47,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { po
 
   const avatarUrl = post.author.avatarUrl;
 
-  // Auto-play on mount
+  // Setup audio on mount — don't auto-play (blocked on mobile)
   useEffect(() => {
     const audio = new Audio(post.audio_url);
     audioRef.current = audio;
@@ -47,10 +56,15 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { po
       setProgress(0);
       onEnded();
     };
+
+    // Try to auto-play (works on desktop, may fail on mobile)
     audio.play().then(() => {
       setIsPlaying(true);
       animRef.current = requestAnimationFrame(updateProgress);
-    }).catch(() => {});
+    }).catch(() => {
+      // Mobile blocks autoplay — user must tap to play
+      setIsPlaying(false);
+    });
 
     return () => {
       audio.pause();
@@ -72,7 +86,9 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { po
       audioRef.current.pause();
       cancelAnimationFrame(animRef.current);
     } else {
-      audioRef.current.play();
+      audioRef.current.play().catch(() => {
+        toast.error("Appuie pour lancer le son");
+      });
       animRef.current = requestAnimationFrame(updateProgress);
     }
     setIsPlaying(!isPlaying);
@@ -96,8 +112,11 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { po
         </div>
       ) : (
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 gradient-red opacity-15" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/50 to-background/85" />
+          <div
+            className="absolute inset-0 opacity-40"
+            style={{ background: getAvatarGradient(post.author.name || post.user_id) }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/50 to-background/85" />
         </div>
       )}
 
