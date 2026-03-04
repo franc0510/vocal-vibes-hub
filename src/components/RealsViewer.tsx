@@ -112,8 +112,11 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { po
         </div>
       ) : (
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 gradient-red opacity-15" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/50 to-background/85" />
+          <div
+            className="absolute inset-0 opacity-40"
+            style={{ background: getAvatarGradient(post.author.name || post.user_id) }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/50 to-background/85" />
         </div>
       )}
 
