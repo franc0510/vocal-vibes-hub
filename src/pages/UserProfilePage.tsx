@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFollows } from "@/hooks/useFollows";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
+import FollowListModal from "@/components/FollowListModal";
 
 interface Profile {
   id: string;
@@ -99,6 +100,7 @@ const UserProfilePage = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
 
   const { isFollowing, followersCount, followingCount, toggleFollow, loading: followLoading } = useFollows(userId);
   const isOwnProfile = currentUser?.id === userId;
@@ -161,14 +163,14 @@ const UserProfilePage = () => {
             <p className="text-lg font-bold font-display text-foreground">{posts.length}</p>
             <p className="text-xs text-muted-foreground">Voices</p>
           </div>
-          <div className="text-center">
+          <button className="text-center" onClick={() => setFollowListType("followers")}>
             <p className="text-lg font-bold font-display text-foreground">{followersCount}</p>
             <p className="text-xs text-muted-foreground">Followers</p>
-          </div>
-          <div className="text-center">
+          </button>
+          <button className="text-center" onClick={() => setFollowListType("following")}>
             <p className="text-lg font-bold font-display text-foreground">{followingCount}</p>
             <p className="text-xs text-muted-foreground">Following</p>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -215,6 +217,15 @@ const UserProfilePage = () => {
       <AnimatePresence>
         {selectedPost && <PostPlayer post={selectedPost} onClose={() => setSelectedPost(null)} />}
       </AnimatePresence>
+
+      {userId && (
+        <FollowListModal
+          open={followListType !== null}
+          onClose={() => setFollowListType(null)}
+          userId={userId}
+          type={followListType || "followers"}
+        />
+      )}
     </div>
   );
 };

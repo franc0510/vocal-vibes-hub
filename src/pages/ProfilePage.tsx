@@ -4,8 +4,10 @@ import { Settings, LogOut, Camera, Loader2, X, Play } from "lucide-react";
 import VoiceCard from "@/components/VoiceCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
+import { useFollows } from "@/hooks/useFollows";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import FollowListModal from "@/components/FollowListModal";
 
 const ProfilePage = () => {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -14,6 +16,8 @@ const ProfilePage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedPost, setSelectedPost] = useState<VoicePostWithAuthor | null>(null);
+  const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
+  const { followersCount, followingCount } = useFollows(user?.id);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -75,14 +79,14 @@ const ProfilePage = () => {
             <p className="text-lg font-bold font-display text-foreground">{userPosts.length}</p>
             <p className="text-xs text-muted-foreground">Voices</p>
           </div>
-          <div className="text-center">
-            <p className="text-lg font-bold font-display text-foreground">0</p>
+          <button className="text-center" onClick={() => setFollowListType("followers")}>
+            <p className="text-lg font-bold font-display text-foreground">{followersCount}</p>
             <p className="text-xs text-muted-foreground">Followers</p>
-          </div>
-          <div className="text-center">
-            <p className="text-lg font-bold font-display text-foreground">0</p>
+          </button>
+          <button className="text-center" onClick={() => setFollowListType("following")}>
+            <p className="text-lg font-bold font-display text-foreground">{followingCount}</p>
             <p className="text-xs text-muted-foreground">Following</p>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -136,6 +140,15 @@ const ProfilePage = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {user && (
+        <FollowListModal
+          open={followListType !== null}
+          onClose={() => setFollowListType(null)}
+          userId={user.id}
+          type={followListType || "followers"}
+        />
+      )}
     </div>
   );
 };

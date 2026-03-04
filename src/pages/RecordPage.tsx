@@ -8,7 +8,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
 const MAX_DURATION = 45;
-const ADMIN_EMAIL = "gillot33@gmail.com";
 
 const RecordPage = () => {
   const { user } = useAuth();
@@ -18,29 +17,6 @@ const RecordPage = () => {
   const [title, setTitle] = useState("");
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [publishing, setPublishing] = useState(false);
-  const [hasPostedToday, setHasPostedToday] = useState(false);
-  const [checkingLimit, setCheckingLimit] = useState(true);
-
-  const isAdmin = user?.email === ADMIN_EMAIL;
-
-  useEffect(() => {
-    const checkDailyLimit = async () => {
-      if (!user || isAdmin) {
-        setCheckingLimit(false);
-        return;
-      }
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { count } = await supabase
-        .from("voice_posts")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .gte("created_at", today.toISOString());
-      setHasPostedToday((count || 0) > 0);
-      setCheckingLimit(false);
-    };
-    checkDailyLimit();
-  }, [user, isAdmin]);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -116,10 +92,6 @@ const RecordPage = () => {
       toast.error("Add a title to your story");
       return;
     }
-    if (hasPostedToday && !isAdmin) {
-      toast.error("Tu as déjà publié ton vocal du jour ! Reviens demain 🎙️");
-      return;
-    }
 
     setPublishing(true);
     try {
@@ -145,7 +117,7 @@ const RecordPage = () => {
       setTitle("");
       setAudioBlob(null);
       setElapsed(0);
-      setHasPostedToday(true);
+      
       navigate("/");
     } catch (err: any) {
       toast.error(err.message || "Failed to publish");
@@ -169,12 +141,6 @@ const RecordPage = () => {
         </p>
       </div>
 
-      {hasPostedToday && !isAdmin && (
-        <div className="bg-card border border-border/50 rounded-xl p-3 mb-3 text-center">
-          <p className="text-sm font-medium text-foreground">🎙️ Tu as déjà publié ton vocal du jour</p>
-          <p className="text-xs text-muted-foreground mt-1">Reviens demain pour une nouvelle anecdote !</p>
-        </div>
-      )}
 
       <div className="flex-1 flex flex-col items-center justify-center min-h-0">
         <div className="mb-2 text-center">
