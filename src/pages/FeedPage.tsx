@@ -32,7 +32,7 @@ const FeedPage = () => {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            Amis
+            Friends
           </button>
         </div>
         <div className="flex-1 flex justify-end">
