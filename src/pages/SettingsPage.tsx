@@ -117,14 +117,14 @@ const SettingsPage = () => {
             className="w-full gradient-red text-primary-foreground py-3 rounded-xl text-sm font-medium shadow-red flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {saving && <Loader2 size={16} className="animate-spin" />}
-            {saving ? "Sauvegarde..." : "Sauvegarder"}
+            {saving ? "Saving..." : "Save"}
           </button>
 
           <button
             onClick={signOut}
             className="w-full bg-card border border-destructive/30 text-destructive py-3 rounded-xl text-sm font-medium hover:bg-destructive/10 transition-colors"
           >
-            Se déconnecter
+            Log Out
           </button>
         </section>
       </div>
