@@ -39,10 +39,10 @@ const SettingsPage = () => {
         .eq("id", user.id);
       if (error) throw error;
       await refreshProfile();
-      toast.success("Profil mis à jour !");
+      toast.success("Profile updated!");
       navigate("/profile");
     } catch (err: any) {
-      toast.error(err.message || "Erreur lors de la sauvegarde");
+      toast.error(err.message || "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -54,26 +54,26 @@ const SettingsPage = () => {
         <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-lg font-bold font-display text-foreground">Paramètres</h1>
+        <h1 className="text-lg font-bold font-display text-foreground">Settings</h1>
       </header>
 
       <div className="space-y-5">
         {/* Profile Section */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Profil</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Profile</h2>
 
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Nom d'affichage</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Display Name</label>
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Ton nom..."
+              placeholder="Your name..."
               className="w-full bg-card border border-border/50 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
             />
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Nom d'utilisateur</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Username</label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
@@ -87,7 +87,7 @@ const SettingsPage = () => {
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="Parle de toi..."
+              placeholder="Tell us about yourself..."
               rows={3}
               maxLength={150}
               className="w-full bg-card border border-border/50 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50 transition-shadow resize-none"
@@ -98,12 +98,12 @@ const SettingsPage = () => {
 
         {/* Privacy Section */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Confidentialité</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Privacy</h2>
 
           <div className="flex items-center justify-between bg-card border border-border/50 rounded-xl px-4 py-3">
             <div>
-              <p className="text-sm font-medium text-foreground">Compte privé</p>
-              <p className="text-xs text-muted-foreground">Seuls tes abonnés peuvent voir tes vocaux</p>
+              <p className="text-sm font-medium text-foreground">Private Account</p>
+              <p className="text-xs text-muted-foreground">Only your followers can see your voices</p>
             </div>
             <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
           </div>
@@ -117,14 +117,14 @@ const SettingsPage = () => {
             className="w-full gradient-red text-primary-foreground py-3 rounded-xl text-sm font-medium shadow-red flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {saving && <Loader2 size={16} className="animate-spin" />}
-            {saving ? "Sauvegarde..." : "Sauvegarder"}
+            {saving ? "Saving..." : "Save"}
           </button>
 
           <button
             onClick={signOut}
             className="w-full bg-card border border-destructive/30 text-destructive py-3 rounded-xl text-sm font-medium hover:bg-destructive/10 transition-colors"
           >
-            Se déconnecter
+            Log Out
           </button>
         </section>
       </div>
