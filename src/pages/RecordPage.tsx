@@ -17,6 +17,7 @@ const RecordPage = () => {
   const [title, setTitle] = useState("");
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
