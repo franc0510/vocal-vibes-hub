@@ -12,6 +12,7 @@ import RecordPage from "@/pages/RecordPage";
 import ProfilePage from "@/pages/ProfilePage";
 import MessagesPage from "@/pages/MessagesPage";
 import AuthPage from "@/pages/AuthPage";
+import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useDailyNotification } from "@/hooks/useDailyNotification";
