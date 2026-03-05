@@ -298,7 +298,19 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
         </motion.div>
       </AnimatePresence>
 
-      <CommentsPanel open={commentsOpen} onClose={() => setCommentsOpen(false)} postId={currentPost?.id || ""} />
+      <CommentsPanel
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        postId={currentPost?.id || ""}
+        onCommentAdded={() => {
+          if (currentPost) {
+            setLocalCommentCounts((prev) => ({
+              ...prev,
+              [currentPost.id]: (prev[currentPost.id] ?? currentPost.comments_count) + 1,
+            }));
+          }
+        }}
+      />
       <SharePanel open={shareOpen} onClose={() => setShareOpen(false)} postId={currentPost?.id || ""} postTitle={currentPost?.title || ""} postAuthor={currentPost?.author.name || ""} />
     </div>
   );
