@@ -22,7 +22,7 @@ const FeedPage = () => {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            Pour toi
+            For you
           </button>
           <button
             onClick={() => setTab("friends")}
@@ -32,7 +32,7 @@ const FeedPage = () => {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            Amis
+            Friends
           </button>
         </div>
         <div className="flex-1 flex justify-end">
