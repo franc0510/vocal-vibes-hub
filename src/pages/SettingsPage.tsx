@@ -63,11 +63,11 @@ const SettingsPage = () => {
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Profile</h2>
 
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Nom d'affichage</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Display Name</label>
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Ton nom..."
+              placeholder="Your name..."
               className="w-full bg-card border border-border/50 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
             />
           </div>
