@@ -115,6 +115,12 @@ export const useVoicePosts = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "voice_posts" }, () => {
         fetchPosts();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "voice_post_likes" }, () => {
+        fetchPosts();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, () => {
+        fetchPosts();
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
