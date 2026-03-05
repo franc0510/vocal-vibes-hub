@@ -35,7 +35,7 @@ const formatTime = (dateStr: string) => {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onEnded: () => void }) => {
+const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded, commentCount }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onEnded: () => void; commentCount: number }) => {
   const { user } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
@@ -172,7 +172,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { po
           <div className="w-11 h-11 rounded-full bg-card/60 backdrop-blur-sm border border-border/30 flex items-center justify-center">
             <MessageCircle size={22} className="text-foreground" />
           </div>
-          <span className="text-[10px] text-muted-foreground font-medium">{formatCount(post.comments_count)}</span>
+          <span className="text-[10px] text-muted-foreground font-medium">{formatCount(commentCount)}</span>
         </button>
 
         <button onClick={onShareOpen} className="flex flex-col items-center gap-1">
@@ -206,6 +206,7 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
   const [currentIndex, setCurrentIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [localCommentCounts, setLocalCommentCounts] = useState<Record<string, number>>({});
 
   const posts = filterFriends
     ? allPosts.filter((p) => friendIds.includes(p.user_id))
@@ -288,6 +289,7 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
         >
           <RealItem
             post={currentPost}
+            commentCount={localCommentCounts[currentPost?.id] ?? currentPost?.comments_count ?? 0}
             onCommentsOpen={() => setCommentsOpen(true)}
             onShareOpen={() => setShareOpen(true)}
             onDelete={handleDelete}
@@ -296,7 +298,19 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
         </motion.div>
       </AnimatePresence>
 
-      <CommentsPanel open={commentsOpen} onClose={() => setCommentsOpen(false)} postId={currentPost?.id || ""} />
+      <CommentsPanel
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        postId={currentPost?.id || ""}
+        onCommentAdded={() => {
+          if (currentPost) {
+            setLocalCommentCounts((prev) => ({
+              ...prev,
+              [currentPost.id]: (prev[currentPost.id] ?? currentPost.comments_count) + 1,
+            }));
+          }
+        }}
+      />
       <SharePanel open={shareOpen} onClose={() => setShareOpen(false)} postId={currentPost?.id || ""} postTitle={currentPost?.title || ""} postAuthor={currentPost?.author.name || ""} />
     </div>
   );
