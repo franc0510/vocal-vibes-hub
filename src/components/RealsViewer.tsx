@@ -172,7 +172,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded, commen
           <div className="w-11 h-11 rounded-full bg-card/60 backdrop-blur-sm border border-border/30 flex items-center justify-center">
             <MessageCircle size={22} className="text-foreground" />
           </div>
-          <span className="text-[10px] text-muted-foreground font-medium">{formatCount(post.comments_count)}</span>
+          <span className="text-[10px] text-muted-foreground font-medium">{formatCount(commentCount)}</span>
         </button>
 
         <button onClick={onShareOpen} className="flex flex-col items-center gap-1">
