@@ -142,6 +142,7 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
 
       setText("");
       setRecordingBlob(null);
+      onCommentAdded?.();
       fetchComments();
     } catch (err: any) {
       toast.error(err.message);
