@@ -54,7 +54,7 @@ const ProfilePage = () => {
           <button onClick={signOut} className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
             <LogOut size={16} />
           </button>
-          <button className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => navigate("/settings")} className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
             <Settings size={16} />
           </button>
         </div>

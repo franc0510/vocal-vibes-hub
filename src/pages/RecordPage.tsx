@@ -203,9 +203,29 @@ const RecordPage = () => {
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Give your story a title..."
+          placeholder="Donne un titre à ton vocal..."
           className="w-full max-w-xs bg-card border border-border/50 rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50 transition-shadow shadow-card mb-3"
         />
+
+        {/* Visibility toggle */}
+        <div className="flex items-center gap-3 mb-3 bg-card border border-border/50 rounded-xl px-4 py-2.5 w-full max-w-xs">
+          <button
+            onClick={() => setVisibility("public")}
+            className={`flex-1 text-xs font-medium py-1.5 rounded-lg transition-colors ${
+              visibility === "public" ? "gradient-red text-primary-foreground shadow-red" : "text-muted-foreground"
+            }`}
+          >
+            🌍 Public
+          </button>
+          <button
+            onClick={() => setVisibility("private")}
+            className={`flex-1 text-xs font-medium py-1.5 rounded-lg transition-colors ${
+              visibility === "private" ? "gradient-red text-primary-foreground shadow-red" : "text-muted-foreground"
+            }`}
+          >
+            🔒 Amis
+          </button>
+        </div>
 
         <button
           onClick={handlePublish}
@@ -213,7 +233,7 @@ const RecordPage = () => {
           className="gradient-red text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium shadow-red flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           {publishing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          {publishing ? "Publishing..." : "Publish"}
+          {publishing ? "Publication..." : "Publier"}
         </button>
       </div>
     </div>
