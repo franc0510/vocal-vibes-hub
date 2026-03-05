@@ -233,7 +233,7 @@ const RecordPage = () => {
           className="gradient-red text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-medium shadow-red flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           {publishing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          {publishing ? "Publication..." : "Publier"}
+          {publishing ? "Publishing..." : "Publish"}
         </button>
       </div>
     </div>
