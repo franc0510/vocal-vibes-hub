@@ -110,7 +110,8 @@ const RecordPage = () => {
         title: title.trim(),
         audio_url: urlData.publicUrl,
         duration: elapsed,
-      });
+        visibility,
+      } as any);
 
       if (insertError) throw insertError;
 
