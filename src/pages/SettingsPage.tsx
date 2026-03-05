@@ -39,10 +39,10 @@ const SettingsPage = () => {
         .eq("id", user.id);
       if (error) throw error;
       await refreshProfile();
-      toast.success("Profil mis à jour !");
+      toast.success("Profile updated!");
       navigate("/profile");
     } catch (err: any) {
-      toast.error(err.message || "Erreur lors de la sauvegarde");
+      toast.error(err.message || "Failed to save");
     } finally {
       setSaving(false);
     }
