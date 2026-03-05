@@ -12,6 +12,7 @@ import FollowListModal from "@/components/FollowListModal";
 
 const ProfilePage = () => {
   const { user, profile, signOut, refreshProfile } = useAuth();
+  const navigate = useNavigate();
   const { posts } = useVoicePosts();
   const userPosts = posts.filter((p) => p.user_id === user?.id);
   const fileInputRef = useRef<HTMLInputElement>(null);
