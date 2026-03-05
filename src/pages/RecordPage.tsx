@@ -223,7 +223,7 @@ const RecordPage = () => {
               visibility === "private" ? "gradient-red text-primary-foreground shadow-red" : "text-muted-foreground"
             }`}
           >
-            🔒 Amis
+            🔒 Friends
           </button>
         </div>
 
