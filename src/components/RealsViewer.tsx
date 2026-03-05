@@ -8,6 +8,7 @@ import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import defaultAvatarBg from "@/assets/default-avatar-bg.png";
 
 const generateWaveform = (length: number): number[] =>
   Array.from({ length }, () => 0.15 + Math.random() * 0.85);
