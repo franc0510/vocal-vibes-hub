@@ -54,7 +54,7 @@ const SettingsPage = () => {
         <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-lg font-bold font-display text-foreground">Paramètres</h1>
+        <h1 className="text-lg font-bold font-display text-foreground">Settings</h1>
       </header>
 
       <div className="space-y-5">
