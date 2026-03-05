@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, LogOut, Camera, Loader2, X, Play } from "lucide-react";
 import VoiceCard from "@/components/VoiceCard";
