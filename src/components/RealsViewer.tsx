@@ -289,6 +289,7 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
         >
           <RealItem
             post={currentPost}
+            commentCount={localCommentCounts[currentPost?.id] ?? currentPost?.comments_count ?? 0}
             onCommentsOpen={() => setCommentsOpen(true)}
             onShareOpen={() => setShareOpen(true)}
             onDelete={handleDelete}
