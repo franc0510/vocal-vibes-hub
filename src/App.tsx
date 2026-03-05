@@ -12,6 +12,7 @@ import RecordPage from "@/pages/RecordPage";
 import ProfilePage from "@/pages/ProfilePage";
 import MessagesPage from "@/pages/MessagesPage";
 import AuthPage from "@/pages/AuthPage";
+import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useDailyNotification } from "@/hooks/useDailyNotification";
@@ -45,6 +46,7 @@ const AppRoutes = () => {
       <Route path="/user/:userId" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
       <Route path="/post/:postId" element={<ProtectedRoute><PostPage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
     <ProtectedNavWrapper />
