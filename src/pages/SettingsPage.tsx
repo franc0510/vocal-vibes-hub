@@ -60,7 +60,7 @@ const SettingsPage = () => {
       <div className="space-y-5">
         {/* Profile Section */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Profil</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Profile</h2>
 
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Nom d'affichage</label>
