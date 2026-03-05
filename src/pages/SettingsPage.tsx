@@ -98,12 +98,12 @@ const SettingsPage = () => {
 
         {/* Privacy Section */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Confidentialité</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Privacy</h2>
 
           <div className="flex items-center justify-between bg-card border border-border/50 rounded-xl px-4 py-3">
             <div>
-              <p className="text-sm font-medium text-foreground">Compte privé</p>
-              <p className="text-xs text-muted-foreground">Seuls tes abonnés peuvent voir tes vocaux</p>
+              <p className="text-sm font-medium text-foreground">Private Account</p>
+              <p className="text-xs text-muted-foreground">Only your followers can see your voices</p>
             </div>
             <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
           </div>
