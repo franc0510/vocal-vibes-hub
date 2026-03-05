@@ -113,8 +113,8 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded, commen
         </div>
       ) : (
         <div className="absolute inset-0 z-0">
-          <img src={defaultAvatarBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/50 to-background/85" />
+          <img src={defaultAvatarBg} alt="" className="absolute inset-0 w-full h-full object-cover object-top" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-background/40 to-background/85" />
         </div>
       )}
 
