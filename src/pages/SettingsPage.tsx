@@ -73,7 +73,7 @@ const SettingsPage = () => {
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Nom d'utilisateur</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Username</label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
