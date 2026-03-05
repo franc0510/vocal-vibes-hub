@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -25,6 +25,7 @@ export const useVoicePosts = () => {
   const { user } = useAuth();
   const [posts, setPosts] = useState<VoicePostWithAuthor[]>([]);
   const [loading, setLoading] = useState(true);
+  const shuffledOrderRef = useRef<string[]>([]);
 
   const fetchPosts = async () => {
     setLoading(true);
@@ -60,7 +61,8 @@ export const useVoicePosts = () => {
       likedPostIds = new Set((likes || []).map((l) => l.post_id));
     }
 
-    const enriched: VoicePostWithAuthor[] = postsData.map((p) => {
+    const enrichedMap = new Map<string, VoicePostWithAuthor>();
+    postsData.forEach((p) => {
       const profile = profileMap.get(p.user_id);
       const initials = (profile?.display_name || "U")
         .split(" ")
@@ -68,7 +70,7 @@ export const useVoicePosts = () => {
         .join("")
         .slice(0, 2)
         .toUpperCase();
-      return {
+      enrichedMap.set(p.id, {
         ...p,
         author: {
           name: profile?.display_name || "User",
@@ -77,16 +79,31 @@ export const useVoicePosts = () => {
           avatarUrl: profile?.avatar_url || undefined,
         },
         isLiked: likedPostIds.has(p.id),
-      };
+      });
     });
 
-    // Shuffle randomly
-    for (let i = enriched.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [enriched[i], enriched[j]] = [enriched[j], enriched[i]];
+    // Only shuffle once; on subsequent fetches, keep the same order and append new posts
+    const currentIds = new Set(enrichedMap.keys());
+    if (shuffledOrderRef.current.length === 0) {
+      // First load: shuffle
+      const ids = [...currentIds];
+      for (let i = ids.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+      }
+      shuffledOrderRef.current = ids;
+    } else {
+      // Keep existing order, remove deleted, append new
+      const existing = shuffledOrderRef.current.filter((id) => currentIds.has(id));
+      const newIds = [...currentIds].filter((id) => !shuffledOrderRef.current.includes(id));
+      shuffledOrderRef.current = [...newIds, ...existing];
     }
 
-    setPosts(enriched);
+    const ordered = shuffledOrderRef.current
+      .map((id) => enrichedMap.get(id))
+      .filter(Boolean) as VoicePostWithAuthor[];
+
+    setPosts(ordered);
     setLoading(false);
   };
 
