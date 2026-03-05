@@ -159,7 +159,7 @@ const CommentsPanel = ({ open, onClose, postId }: CommentsPanelProps) => {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-2xl max-h-[70vh] flex flex-col max-w-lg mx-auto border-t border-border/50"
+            className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-2xl max-h-[85vh] flex flex-col max-w-lg mx-auto border-t border-border/50 pb-20"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
