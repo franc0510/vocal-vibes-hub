@@ -61,6 +61,10 @@ const SharePanel = ({ open, onClose, postId, postTitle, postAuthor }: SharePanel
     setLoading(false);
   };
 
+  const incrementShareCount = async () => {
+    await supabase.rpc("increment_shares_count" as any, { p_post_id: postId });
+  };
+
   const sendToFriend = async (friend: Friend) => {
     if (!user) return;
     const shareUrl = `${window.location.origin}/?post=${postId}`;
@@ -77,12 +81,14 @@ const SharePanel = ({ open, onClose, postId, postTitle, postAuthor }: SharePanel
       return;
     }
 
+    await incrementShareCount();
     setFriends((prev) => prev.map((f) => f.id === friend.id ? { ...f, sent: true } : f));
     toast.success(`Sent to ${friend.display_name}`);
   };
 
   const shareExternal = async () => {
     const url = `${window.location.origin}/?post=${postId}`;
+    await incrementShareCount();
     if (navigator.share) {
       try {
         await navigator.share({ title: postTitle, text: `Listen to "${postTitle}" by ${postAuthor} on VocMe`, url });
@@ -96,6 +102,7 @@ const SharePanel = ({ open, onClose, postId, postTitle, postAuthor }: SharePanel
   const copyLink = async () => {
     const url = `${window.location.origin}/?post=${postId}`;
     await navigator.clipboard.writeText(url);
+    await incrementShareCount();
     toast.success("Link copied!");
   };
 
