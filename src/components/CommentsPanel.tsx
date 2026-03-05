@@ -18,6 +18,7 @@ interface CommentsPanelProps {
   open: boolean;
   onClose: () => void;
   postId: string;
+  onCommentAdded?: () => void;
 }
 
 const formatTime = (dateStr: string) => {
