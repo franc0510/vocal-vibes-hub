@@ -57,7 +57,7 @@ const VoiceComment = ({ url }: { url: string }) => {
   );
 };
 
-const CommentsPanel = ({ open, onClose, postId }: CommentsPanelProps) => {
+const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelProps) => {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
