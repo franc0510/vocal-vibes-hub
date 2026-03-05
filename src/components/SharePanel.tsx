@@ -62,7 +62,7 @@ const SharePanel = ({ open, onClose, postId, postTitle, postAuthor }: SharePanel
   };
 
   const incrementShareCount = async () => {
-    await supabase.rpc("increment_shares_count" as any, { p_post_id: postId });
+    await (supabase.rpc as any)("increment_shares_count", { p_post_id: postId });
   };
 
   const sendToFriend = async (friend: Friend) => {
