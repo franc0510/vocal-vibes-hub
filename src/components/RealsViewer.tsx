@@ -35,7 +35,7 @@ const formatTime = (dateStr: string) => {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onEnded: () => void }) => {
+const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded, commentCount }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onEnded: () => void; commentCount: number }) => {
   const { user } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
