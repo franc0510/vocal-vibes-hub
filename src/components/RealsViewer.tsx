@@ -36,38 +36,62 @@ const formatTime = (dateStr: string) => {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded, commentCount }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onEnded: () => void; commentCount: number }) => {
+const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnded, onListened, commentCount }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onReport: () => void; onEnded: () => void; onListened: () => void; commentCount: number }) => {
   const { user } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes_count);
   const [progress, setProgress] = useState(0);
+  const [hasListened, setHasListened] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animRef = useRef<number>(0);
   const waveform = useRef(generateWaveform(32)).current;
 
   const avatarUrl = post.author.avatarUrl;
 
-  // Setup audio on mount — don't auto-play (blocked on mobile)
+  // Create audio element but DON'T auto-play — wait for user gesture on mobile
   useEffect(() => {
-    const audio = new Audio(post.audio_url);
+    // Clean up previous audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+    }
+    cancelAnimationFrame(animRef.current);
+
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = post.audio_url;
     audioRef.current = audio;
+
     audio.onended = () => {
       setIsPlaying(false);
       setProgress(0);
       onEnded();
     };
 
-    // Try to auto-play (works on desktop, may fail on mobile)
-    audio.play().then(() => {
-      setIsPlaying(true);
-      animRef.current = requestAnimationFrame(updateProgress);
-    }).catch(() => {
-      // Mobile blocks autoplay — user must tap to play
-      setIsPlaying(false);
-    });
+    // Mark as listened after 2 seconds of playback
+    const handleTimeUpdate = () => {
+      if (audio.currentTime >= 2 && !hasListened) {
+        setHasListened(true);
+        onListened();
+      }
+    };
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+
+    // Try auto-play (will work on desktop, fail silently on mobile)
+    const tryAutoPlay = async () => {
+      try {
+        await audio.play();
+        setIsPlaying(true);
+        animRef.current = requestAnimationFrame(updateProgress);
+      } catch {
+        setIsPlaying(false);
+      }
+    };
+    tryAutoPlay();
 
     return () => {
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.pause();
       audio.src = "";
       cancelAnimationFrame(animRef.current);
@@ -82,17 +106,33 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded, commen
   };
 
   const togglePlay = () => {
-    if (!audioRef.current) return;
+    const audio = audioRef.current;
+    if (!audio) return;
     if (isPlaying) {
-      audioRef.current.pause();
+      audio.pause();
       cancelAnimationFrame(animRef.current);
+      setIsPlaying(false);
     } else {
-      audioRef.current.play().catch(() => {
-        toast.error("Appuie pour lancer le son");
-      });
-      animRef.current = requestAnimationFrame(updateProgress);
+      // On mobile, play() must be called within a user gesture handler
+      const playPromise = audio.play();
+      if (playPromise) {
+        playPromise.then(() => {
+          setIsPlaying(true);
+          animRef.current = requestAnimationFrame(updateProgress);
+        }).catch(() => {
+          // Retry with a fresh audio element (mobile workaround)
+          const fresh = new Audio(post.audio_url);
+          fresh.onended = () => { setIsPlaying(false); setProgress(0); onEnded(); };
+          audioRef.current = fresh;
+          fresh.play().then(() => {
+            setIsPlaying(true);
+            animRef.current = requestAnimationFrame(updateProgress);
+          }).catch(() => {
+            toast.error("Tap again to play");
+          });
+        });
+      }
     }
-    setIsPlaying(!isPlaying);
   };
 
   const toggleLike = async () => {
