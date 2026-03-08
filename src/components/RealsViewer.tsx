@@ -225,7 +225,16 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
             <div className="w-11 h-11 rounded-full bg-destructive/20 backdrop-blur-sm border border-destructive/30 flex items-center justify-center">
               <Trash2 size={20} className="text-destructive" />
             </div>
-            <span className="text-[10px] text-destructive font-medium">Suppr.</span>
+            <span className="text-[10px] text-destructive font-medium">Delete</span>
+          </button>
+        )}
+
+        {user && user.id !== post.user_id && (
+          <button onClick={onReport} className="flex flex-col items-center gap-1">
+            <div className="w-11 h-11 rounded-full bg-card/60 backdrop-blur-sm border border-border/30 flex items-center justify-center">
+              <Flag size={20} className="text-muted-foreground" />
+            </div>
+            <span className="text-[10px] text-muted-foreground font-medium">Report</span>
           </button>
         )}
       </div>
