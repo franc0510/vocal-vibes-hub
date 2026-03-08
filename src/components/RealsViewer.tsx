@@ -326,10 +326,10 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
     return (
       <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-lg font-display font-bold text-foreground mb-1">
-          {filterFriends ? "Aucun vocal d'amis" : "No stories yet"}
+          {filterFriends ? "No friend posts yet" : "No stories yet"}
         </p>
         <p className="text-sm text-muted-foreground">
-          {filterFriends ? "Suis des utilisateurs pour voir leurs vocaux ici !" : "Be the first to share a voice story!"}
+          {filterFriends ? "Follow users to see their posts here!" : "Be the first to share a voice story!"}
         </p>
       </div>
     );
