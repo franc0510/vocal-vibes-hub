@@ -288,13 +288,30 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
   const handleDelete = async () => {
     const post = posts[currentIndex];
     if (!post || !user || user.id !== post.user_id) return;
-    const confirmed = window.confirm("Supprimer ce vocal ? Tu pourras en republier un aujourd'hui.");
+    const confirmed = window.confirm("Delete this voice post?");
     if (!confirmed) return;
     const { error } = await supabase.from("voice_posts").delete().eq("id", post.id);
-    if (error) { toast.error("Erreur lors de la suppression"); return; }
-    toast.success("Vocal supprimé !");
+    if (error) { toast.error("Failed to delete"); return; }
+    toast.success("Post deleted!");
     if (currentIndex >= posts.length - 1) setCurrentIndex(Math.max(0, currentIndex - 1));
     refetch();
+  };
+
+  const handleReport = async (reason: string) => {
+    const post = posts[currentIndex];
+    if (!post || !user) return;
+    const { error } = await supabase.from("reports").insert({ user_id: user.id, post_id: post.id, reason } as any);
+    if (error) {
+      if (error.code === "23505") toast.info("You already reported this post");
+      else toast.error("Failed to report");
+      return;
+    }
+    toast.success("Post reported. Thank you!");
+  };
+
+  const handleListened = async (postId: string) => {
+    if (!user) return;
+    await supabase.from("listened_posts").insert({ user_id: user.id, post_id: postId } as any).select().maybeSingle();
   };
 
   if (loading) {
