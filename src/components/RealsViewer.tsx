@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, MessageCircle, Share2, Play, Pause, Trash2 } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, Pause, Trash2, Flag } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
 import CommentsPanel from "./CommentsPanel";
 import SharePanel from "./SharePanel";
@@ -36,38 +36,62 @@ const formatTime = (dateStr: string) => {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded, commentCount }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onEnded: () => void; commentCount: number }) => {
+const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnded, onListened, commentCount }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onReport: () => void; onEnded: () => void; onListened: () => void; commentCount: number }) => {
   const { user } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes_count);
   const [progress, setProgress] = useState(0);
+  const [hasListened, setHasListened] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animRef = useRef<number>(0);
   const waveform = useRef(generateWaveform(32)).current;
 
   const avatarUrl = post.author.avatarUrl;
 
-  // Setup audio on mount — don't auto-play (blocked on mobile)
+  // Create audio element but DON'T auto-play — wait for user gesture on mobile
   useEffect(() => {
-    const audio = new Audio(post.audio_url);
+    // Clean up previous audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+    }
+    cancelAnimationFrame(animRef.current);
+
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = post.audio_url;
     audioRef.current = audio;
+
     audio.onended = () => {
       setIsPlaying(false);
       setProgress(0);
       onEnded();
     };
 
-    // Try to auto-play (works on desktop, may fail on mobile)
-    audio.play().then(() => {
-      setIsPlaying(true);
-      animRef.current = requestAnimationFrame(updateProgress);
-    }).catch(() => {
-      // Mobile blocks autoplay — user must tap to play
-      setIsPlaying(false);
-    });
+    // Mark as listened after 2 seconds of playback
+    const handleTimeUpdate = () => {
+      if (audio.currentTime >= 2 && !hasListened) {
+        setHasListened(true);
+        onListened();
+      }
+    };
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+
+    // Try auto-play (will work on desktop, fail silently on mobile)
+    const tryAutoPlay = async () => {
+      try {
+        await audio.play();
+        setIsPlaying(true);
+        animRef.current = requestAnimationFrame(updateProgress);
+      } catch {
+        setIsPlaying(false);
+      }
+    };
+    tryAutoPlay();
 
     return () => {
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.pause();
       audio.src = "";
       cancelAnimationFrame(animRef.current);
@@ -82,17 +106,33 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded, commen
   };
 
   const togglePlay = () => {
-    if (!audioRef.current) return;
+    const audio = audioRef.current;
+    if (!audio) return;
     if (isPlaying) {
-      audioRef.current.pause();
+      audio.pause();
       cancelAnimationFrame(animRef.current);
+      setIsPlaying(false);
     } else {
-      audioRef.current.play().catch(() => {
-        toast.error("Appuie pour lancer le son");
-      });
-      animRef.current = requestAnimationFrame(updateProgress);
+      // On mobile, play() must be called within a user gesture handler
+      const playPromise = audio.play();
+      if (playPromise) {
+        playPromise.then(() => {
+          setIsPlaying(true);
+          animRef.current = requestAnimationFrame(updateProgress);
+        }).catch(() => {
+          // Retry with a fresh audio element (mobile workaround)
+          const fresh = new Audio(post.audio_url);
+          fresh.onended = () => { setIsPlaying(false); setProgress(0); onEnded(); };
+          audioRef.current = fresh;
+          fresh.play().then(() => {
+            setIsPlaying(true);
+            animRef.current = requestAnimationFrame(updateProgress);
+          }).catch(() => {
+            toast.error("Tap again to play");
+          });
+        });
+      }
     }
-    setIsPlaying(!isPlaying);
   };
 
   const toggleLike = async () => {
@@ -185,7 +225,16 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onEnded, commen
             <div className="w-11 h-11 rounded-full bg-destructive/20 backdrop-blur-sm border border-destructive/30 flex items-center justify-center">
               <Trash2 size={20} className="text-destructive" />
             </div>
-            <span className="text-[10px] text-destructive font-medium">Suppr.</span>
+            <span className="text-[10px] text-destructive font-medium">Delete</span>
+          </button>
+        )}
+
+        {user && user.id !== post.user_id && (
+          <button onClick={onReport} className="flex flex-col items-center gap-1">
+            <div className="w-11 h-11 rounded-full bg-card/60 backdrop-blur-sm border border-border/30 flex items-center justify-center">
+              <Flag size={20} className="text-muted-foreground" />
+            </div>
+            <span className="text-[10px] text-muted-foreground font-medium">Report</span>
           </button>
         )}
       </div>
@@ -205,6 +254,7 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [localCommentCounts, setLocalCommentCounts] = useState<Record<string, number>>({});
+  const [reportOpen, setReportOpen] = useState(false);
 
   const posts = filterFriends
     ? allPosts.filter((p) => friendIds.includes(p.user_id))
@@ -238,13 +288,30 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
   const handleDelete = async () => {
     const post = posts[currentIndex];
     if (!post || !user || user.id !== post.user_id) return;
-    const confirmed = window.confirm("Supprimer ce vocal ? Tu pourras en republier un aujourd'hui.");
+    const confirmed = window.confirm("Delete this voice post?");
     if (!confirmed) return;
     const { error } = await supabase.from("voice_posts").delete().eq("id", post.id);
-    if (error) { toast.error("Erreur lors de la suppression"); return; }
-    toast.success("Vocal supprimé !");
+    if (error) { toast.error("Failed to delete"); return; }
+    toast.success("Post deleted!");
     if (currentIndex >= posts.length - 1) setCurrentIndex(Math.max(0, currentIndex - 1));
     refetch();
+  };
+
+  const handleReport = async (reason: string) => {
+    const post = posts[currentIndex];
+    if (!post || !user) return;
+    const { error } = await supabase.from("reports").insert({ user_id: user.id, post_id: post.id, reason } as any);
+    if (error) {
+      if (error.code === "23505") toast.info("You already reported this post");
+      else toast.error("Failed to report");
+      return;
+    }
+    toast.success("Post reported. Thank you!");
+  };
+
+  const handleListened = async (postId: string) => {
+    if (!user) return;
+    await supabase.from("listened_posts").insert({ user_id: user.id, post_id: postId } as any).select().maybeSingle();
   };
 
   if (loading) {
@@ -259,10 +326,10 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
     return (
       <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-lg font-display font-bold text-foreground mb-1">
-          {filterFriends ? "Aucun vocal d'amis" : "No stories yet"}
+          {filterFriends ? "No friend posts yet" : "No stories yet"}
         </p>
         <p className="text-sm text-muted-foreground">
-          {filterFriends ? "Suis des utilisateurs pour voir leurs vocaux ici !" : "Be the first to share a voice story!"}
+          {filterFriends ? "Follow users to see their posts here!" : "Be the first to share a voice story!"}
         </p>
       </div>
     );
@@ -291,7 +358,9 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
             onCommentsOpen={() => setCommentsOpen(true)}
             onShareOpen={() => setShareOpen(true)}
             onDelete={handleDelete}
+            onReport={() => setReportOpen(true)}
             onEnded={goNext}
+            onListened={() => handleListened(currentPost?.id)}
           />
         </motion.div>
       </AnimatePresence>
@@ -310,6 +379,37 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
         }}
       />
       <SharePanel open={shareOpen} onClose={() => setShareOpen(false)} postId={currentPost?.id || ""} postTitle={currentPost?.title || ""} postAuthor={currentPost?.author.name || ""} />
+
+      {/* Report Modal */}
+      <AnimatePresence>
+        {reportOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm" onClick={() => setReportOpen(false)} />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center px-6"
+            >
+              <div className="bg-card rounded-2xl p-5 w-full max-w-sm border border-border/50 shadow-elevated">
+                <h3 className="text-sm font-bold font-display text-foreground mb-3">Report this post</h3>
+                <div className="space-y-2">
+                  {["Inappropriate content", "Spam", "Harassment", "Other"].map((reason) => (
+                    <button
+                      key={reason}
+                      onClick={() => { handleReport(reason); setReportOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 rounded-xl text-sm text-foreground bg-secondary hover:bg-secondary/80 transition-colors"
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setReportOpen(false)} className="w-full mt-3 text-xs text-muted-foreground text-center py-2">Cancel</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

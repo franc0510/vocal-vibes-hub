@@ -89,6 +89,10 @@ const RecordPage = () => {
       toast.error("Record something first!");
       return;
     }
+    if (elapsed < 3) {
+      toast.error("Recording must be at least 3 seconds");
+      return;
+    }
     if (!title.trim()) {
       toast.error("Add a title to your story");
       return;

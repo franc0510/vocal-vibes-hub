@@ -82,26 +82,26 @@ export const useVoicePosts = () => {
       });
     });
 
-    // Only shuffle once; on subsequent fetches, keep the same order and append new posts
-    const currentIds = new Set(enrichedMap.keys());
-    if (shuffledOrderRef.current.length === 0) {
-      // First load: shuffle
-      const ids = [...currentIds];
-      for (let i = ids.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [ids[i], ids[j]] = [ids[j], ids[i]];
-      }
-      shuffledOrderRef.current = ids;
-    } else {
-      // Keep existing order, remove deleted, append new
-      const existing = shuffledOrderRef.current.filter((id) => currentIds.has(id));
-      const newIds = [...currentIds].filter((id) => !shuffledOrderRef.current.includes(id));
-      shuffledOrderRef.current = [...newIds, ...existing];
+    // Get listened post IDs for current user
+    let listenedPostIds = new Set<string>();
+    if (user) {
+      const { data: listened } = await supabase
+        .from("listened_posts")
+        .select("post_id")
+        .eq("user_id", user.id);
+      listenedPostIds = new Set((listened || []).map((l: any) => l.post_id));
     }
 
-    const ordered = shuffledOrderRef.current
-      .map((id) => enrichedMap.get(id))
-      .filter(Boolean) as VoicePostWithAuthor[];
+    // Sort: unlistened first, then by likes_count descending
+    const allEntries = [...enrichedMap.values()];
+    allEntries.sort((a, b) => {
+      const aListened = listenedPostIds.has(a.id) ? 1 : 0;
+      const bListened = listenedPostIds.has(b.id) ? 1 : 0;
+      if (aListened !== bListened) return aListened - bListened; // unlistened first
+      return b.likes_count - a.likes_count; // then by most liked
+    });
+
+    const ordered = allEntries;
 
     setPosts(ordered);
     setLoading(false);
