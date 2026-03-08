@@ -358,7 +358,9 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
             onCommentsOpen={() => setCommentsOpen(true)}
             onShareOpen={() => setShareOpen(true)}
             onDelete={handleDelete}
+            onReport={() => setReportOpen(true)}
             onEnded={goNext}
+            onListened={() => handleListened(currentPost?.id)}
           />
         </motion.div>
       </AnimatePresence>
