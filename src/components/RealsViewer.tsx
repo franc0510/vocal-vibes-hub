@@ -379,6 +379,37 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
         }}
       />
       <SharePanel open={shareOpen} onClose={() => setShareOpen(false)} postId={currentPost?.id || ""} postTitle={currentPost?.title || ""} postAuthor={currentPost?.author.name || ""} />
+
+      {/* Report Modal */}
+      <AnimatePresence>
+        {reportOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm" onClick={() => setReportOpen(false)} />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center px-6"
+            >
+              <div className="bg-card rounded-2xl p-5 w-full max-w-sm border border-border/50 shadow-elevated">
+                <h3 className="text-sm font-bold font-display text-foreground mb-3">Report this post</h3>
+                <div className="space-y-2">
+                  {["Inappropriate content", "Spam", "Harassment", "Other"].map((reason) => (
+                    <button
+                      key={reason}
+                      onClick={() => { handleReport(reason); setReportOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 rounded-xl text-sm text-foreground bg-secondary hover:bg-secondary/80 transition-colors"
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setReportOpen(false)} className="w-full mt-3 text-xs text-muted-foreground text-center py-2">Cancel</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
