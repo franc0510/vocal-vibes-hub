@@ -254,6 +254,7 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [localCommentCounts, setLocalCommentCounts] = useState<Record<string, number>>({});
+  const [reportOpen, setReportOpen] = useState(false);
 
   const posts = filterFriends
     ? allPosts.filter((p) => friendIds.includes(p.user_id))
