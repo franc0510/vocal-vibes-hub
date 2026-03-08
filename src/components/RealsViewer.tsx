@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, MessageCircle, Share2, Play, Pause, Trash2 } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, Pause, Trash2, Flag } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
 import CommentsPanel from "./CommentsPanel";
 import SharePanel from "./SharePanel";
