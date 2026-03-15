@@ -64,24 +64,60 @@ const PostPage = () => {
   const updateProgress = () => {
     if (audioRef.current) {
       setProgress(audioRef.current.currentTime / (audioRef.current.duration || 1));
-      if (!audioRef.current.paused) animRef.current = requestAnimationFrame(updateProgress);
+      if (!audioRef.current.paused) {
+        animRef.current = requestAnimationFrame(updateProgress);
+      }
     }
   };
 
-  const togglePlay = () => {
-    if (!post) return;
-    if (!audioRef.current) {
-      audioRef.current = new Audio(post.audio_url);
-      audioRef.current.onended = () => { setPlaying(false); setProgress(0); };
+  const togglePlay = async () => {
+    if (!post || !audioRef.current) return;
+
+    const audio = audioRef.current;
+
+    try {
+      if (playing) {
+        audio.pause();
+        cancelAnimationFrame(animRef.current);
+        setPlaying(false);
+      } else {
+        // Charger l'audio avec CORS
+        if (!audio.src || audio.src !== post.audio_url) {
+          audio.src = post.audio_url;
+          audio.crossOrigin = "anonymous";
+          audio.load();
+          // Attendre que les métadonnées soient chargées
+          await new Promise<void>((resolve, reject) => {
+            const onLoadedMetadata = () => {
+              audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+              audio.removeEventListener("error", onError);
+              resolve();
+            };
+            const onError = () => {
+              audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+              audio.removeEventListener("error", onError);
+              reject(new Error("Failed to load audio"));
+            };
+            audio.addEventListener("loadedmetadata", onLoadedMetadata, { once: true });
+            audio.addEventListener("error", onError, { once: true });
+            // Timeout après 10s
+            setTimeout(() => reject(new Error("Audio load timeout")), 10000);
+          });
+        }
+
+        // Jouer l'audio
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+        animRef.current = requestAnimationFrame(updateProgress);
+        setPlaying(true);
+      }
+    } catch (err: any) {
+      console.error("Audio play error:", err.message);
+      toast.error("Impossible de lire l'audio : " + (err.message || "Erreur inconnue"));
+      setPlaying(false);
     }
-    if (playing) {
-      audioRef.current.pause();
-      cancelAnimationFrame(animRef.current);
-    } else {
-      audioRef.current.play();
-      animRef.current = requestAnimationFrame(updateProgress);
-    }
-    setPlaying(!playing);
   };
 
   const toggleLike = async () => {
@@ -113,7 +149,28 @@ const PostPage = () => {
   const initials = (author?.display_name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen pb-24 relative">
+    <div
+      className="w-full h-full relative overflow-y-auto overflow-x-hidden"
+      style={{ touchAction: "pan-y", paddingBottom: "env(safe-area-inset-bottom, 56px)" }}
+    >
+      {/* Élément audio natif avec configuration CORS */}
+      <audio
+        ref={audioRef}
+        onEnded={() => { 
+          setPlaying(false); 
+          setProgress(0); 
+          cancelAnimationFrame(animRef.current); 
+        }}
+        onError={(e) => {
+          console.error("Audio error:", e);
+          toast.error("Erreur de lecture audio");
+          setPlaying(false);
+        }}
+        preload="metadata"
+        playsInline
+        crossOrigin="anonymous"
+      />
+
       {/* Background */}
       {author?.avatar_url && (
         <div className="absolute inset-0 z-0">
@@ -122,7 +179,7 @@ const PostPage = () => {
         </div>
       )}
 
-      <div className="relative z-10 px-4 pt-4">
+      <div className="relative z-10 px-4 pt-3 pb-6">
         {/* Header */}
         <header className="flex items-center gap-3 mb-8">
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-card/60 backdrop-blur-sm flex items-center justify-center text-foreground">
@@ -188,6 +245,9 @@ const PostPage = () => {
           </button>
         </div>
       </div>
+
+      {/* Spacer pour la navbar */}
+      <div className="h-24" />
 
       <CommentsPanel open={commentsOpen} onClose={() => setCommentsOpen(false)} postId={post.id} />
       <SharePanel open={shareOpen} onClose={() => setShareOpen(false)} postId={post.id} postTitle={post.title} postAuthor={author?.display_name || "User"} />

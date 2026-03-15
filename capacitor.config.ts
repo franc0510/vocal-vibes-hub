@@ -1,13 +1,21 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.7b266db427294ea1a7008152e5c5a1ab',
+  appId: 'com.vocme.app',
   appName: 'VocMe',
   webDir: 'dist',
   server: {
-    url: 'https://7b266db4-2729-4ea1-a700-8152e5c5a1ab.lovableproject.com?forceHideBadge=true',
-    cleartext: true,
+    androidScheme: 'https'
   },
+  ios: {
+    contentInset: 'always',
+    allowsLinkPreview: false
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 0
+    }
+  }
 };
 
 export default config;

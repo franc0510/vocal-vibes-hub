@@ -11,7 +11,7 @@ const FeedPage = () => {
 
   return (
     <div className="h-screen flex flex-col">
-      <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 pt-4 pb-2">
+      <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 pb-2" style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}>
         <div className="flex-1" />
         <div className="flex items-center gap-1 bg-card/60 backdrop-blur-md rounded-full p-1 border border-border/30">
           <button

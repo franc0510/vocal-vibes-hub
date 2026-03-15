@@ -49,7 +49,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
 
   const avatarUrl = post.author.avatarUrl;
 
-  // Create audio element but DON'T auto-play — wait for user gesture on mobile
+  // Create and auto-play audio when post changes
   useEffect(() => {
     // Clean up previous audio
     if (audioRef.current) {
@@ -57,41 +57,48 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
       audioRef.current.src = "";
     }
     cancelAnimationFrame(animRef.current);
+    setIsPlaying(false);
+    setProgress(0);
+    setHasListened(false);
 
+    // Create new audio element
     const audio = new Audio();
+    audio.crossOrigin = "anonymous";
     audio.preload = "auto";
-    audio.src = post.audio_url;
-    audioRef.current = audio;
-
+    
     audio.onended = () => {
       setIsPlaying(false);
       setProgress(0);
       onEnded();
     };
-
-    // Mark as listened after 2 seconds of playback
-    const handleTimeUpdate = () => {
-      if (audio.currentTime >= 2 && !hasListened) {
-        setHasListened(true);
-        onListened();
-      }
+    
+    audio.onerror = (e) => {
+      console.error("❌ Audio error:", e, audio.error);
     };
-    audio.addEventListener("timeupdate", handleTimeUpdate);
-
-    // Try auto-play (will work on desktop, fail silently on mobile)
+    
+    audio.onloadedmetadata = () => {
+      console.log("✅ Audio loaded, duration:", audio.duration);
+    };
+    
+    // Set src and try autoplay
+    audio.src = post.audio_url;
+    audioRef.current = audio;
+    
+    // Try autoplay (works on real iPhone, fails on simulator)
     const tryAutoPlay = async () => {
       try {
         await audio.play();
         setIsPlaying(true);
         animRef.current = requestAnimationFrame(updateProgress);
-      } catch {
-        setIsPlaying(false);
+      } catch (err) {
+        console.log("⚠️ Autoplay blocked (normal on simulator)");
+        // Silent fail - user can tap to play
       }
     };
+    
     tryAutoPlay();
 
     return () => {
-      audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.pause();
       audio.src = "";
       cancelAnimationFrame(animRef.current);
@@ -100,37 +107,44 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
 
   const updateProgress = () => {
     if (audioRef.current) {
-      setProgress(audioRef.current.currentTime / (audioRef.current.duration || 1));
-      if (!audioRef.current.paused) animRef.current = requestAnimationFrame(updateProgress);
+      const currentTime = audioRef.current.currentTime;
+      const duration = audioRef.current.duration || 1;
+      setProgress(currentTime / duration);
+      
+      // Mark as listened after 2 seconds
+      if (currentTime >= 2 && !hasListened) {
+        setHasListened(true);
+        onListened();
+      }
+      
+      if (!audioRef.current.paused) {
+        animRef.current = requestAnimationFrame(updateProgress);
+      }
     }
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio) {
+      console.error("❌ No audio element");
+      toast.error("Erreur audio");
+      return;
+    }
+    
     if (isPlaying) {
       audio.pause();
       cancelAnimationFrame(animRef.current);
       setIsPlaying(false);
     } else {
-      // On mobile, play() must be called within a user gesture handler
-      const playPromise = audio.play();
-      if (playPromise) {
-        playPromise.then(() => {
-          setIsPlaying(true);
-          animRef.current = requestAnimationFrame(updateProgress);
-        }).catch(() => {
-          // Retry with a fresh audio element (mobile workaround)
-          const fresh = new Audio(post.audio_url);
-          fresh.onended = () => { setIsPlaying(false); setProgress(0); onEnded(); };
-          audioRef.current = fresh;
-          fresh.play().then(() => {
-            setIsPlaying(true);
-            animRef.current = requestAnimationFrame(updateProgress);
-          }).catch(() => {
-            toast.error("Tap again to play");
-          });
-        });
+      console.log("▶️ Attempting to play...");
+      try {
+        await audio.play();
+        console.log("✅ Playing!");
+        setIsPlaying(true);
+        animRef.current = requestAnimationFrame(updateProgress);
+      } catch (err: any) {
+        console.error("❌ Play error:", err.name, err.message);
+        toast.error("Impossible de lire l'audio");
       }
     }
   };

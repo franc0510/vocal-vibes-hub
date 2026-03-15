@@ -39,11 +39,35 @@ const AuthPage = () => {
     }
   };
 
-  const handleOAuth = async (provider: "google" | "apple") => {
-    const { error } = await lovable.auth.signInWithOAuth(provider, {
-      redirect_uri: window.location.origin,
+  const handleGoogleSignIn = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: import.meta.env.VITE_APP_URL || window.location.origin,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     });
     if (error) toast.error(error.message);
+  };
+
+  const handleOAuth = async (provider: "google" | "apple") => {
+    try {
+      // Use Supabase directly instead of Lovable Cloud (works locally and in production)
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: window.location.origin,
+          skipBrowserRedirect: false,
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error("OAuth error:", err);
+      toast.error("OAuth non configuré. Utilisez l'email pour vous connecter.");
+    }
   };
 
   return (
