@@ -63,6 +63,10 @@ const SharePanel = ({ open, onClose, postId, postTitle, postAuthor }: SharePanel
 
   const incrementShareCount = async () => {
     await (supabase.rpc as any)("increment_shares_count", { p_post_id: postId });
+    // Record a share row so the post owner gets a notification (trigger handles it)
+    if (user) {
+      await (supabase as any).from("voice_post_shares").insert({ user_id: user.id, post_id: postId });
+    }
   };
 
   const sendToFriend = async (friend: Friend) => {
@@ -182,7 +186,7 @@ const SharePanel = ({ open, onClose, postId, postTitle, postAuthor }: SharePanel
             </div>
 
             {/* Bottom actions */}
-            <div className="px-4 py-3 border-t border-border/30 flex gap-2">
+            <div className="px-4 py-3 border-t border-border/30 flex gap-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 12px), 12px)" }}>
               <button
                 onClick={copyLink}
                 className="flex-1 flex items-center justify-center gap-2 bg-secondary rounded-xl py-2.5 text-xs font-medium text-foreground hover:bg-secondary/80 transition-colors"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,7 +49,7 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="min-h-screen pb-24 px-4 pt-4">
+    <div className="min-h-screen pb-24 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}>
       <header className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft size={18} />
@@ -107,6 +107,21 @@ const SettingsPage = () => {
             </div>
             <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
           </div>
+        </section>
+
+        {/* Groups Section */}
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Groups</h2>
+          <button
+            onClick={() => navigate("/groups")}
+            className="w-full flex items-center gap-3 bg-card border border-border/50 rounded-xl px-4 py-3 text-left hover:bg-secondary/30 transition-colors"
+          >
+            <Users size={18} className="text-primary" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-foreground">Manage Groups</p>
+              <p className="text-xs text-muted-foreground">Create and manage your groups</p>
+            </div>
+          </button>
         </section>
 
         {/* Actions */}

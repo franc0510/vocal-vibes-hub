@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Send, ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Search, Mic, Square, Play, Pause, Send, Loader2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { playExclusive, releaseAudio } from "@/lib/audioManager";
 
 interface Conversation {
   user_id: string;
@@ -19,8 +21,57 @@ interface Message {
   sender_id: string;
   receiver_id: string;
   content: string | null;
+  voice_url: string | null;
   created_at: string;
 }
+
+/** Mini voice player for a voice DM bubble */
+const VoiceMessageBubble = ({ url, isMe }: { url: string; isMe: boolean }) => {
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const barsRef = useRef(Array.from({ length: 14 }, () => 6 + Math.random() * 12));
+
+  const toggle = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio(url);
+      audioRef.current.onended = () => { setPlaying(false); releaseAudio(audioRef.current); };
+      audioRef.current.onpause = () => setPlaying(false);
+      audioRef.current.onplay = () => setPlaying(true);
+    }
+    if (playing) {
+      audioRef.current.pause();
+      releaseAudio(audioRef.current);
+    } else {
+      playExclusive(audioRef.current);
+    }
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl ${
+        isMe
+          ? "gradient-coral text-primary-foreground rounded-br-md"
+          : "bg-secondary text-foreground rounded-bl-md"
+      }`}
+    >
+      {playing ? <Pause size={16} /> : <Play size={16} className={isMe ? "" : "ml-0.5"} />}
+      <div className="flex gap-[3px] items-center h-5">
+        {barsRef.current.map((h, i) => (
+          <div
+            key={i}
+            className={`w-[2.5px] rounded-full ${
+              playing
+                ? isMe ? "bg-primary-foreground/80 animate-pulse" : "bg-primary animate-pulse"
+                : isMe ? "bg-primary-foreground/50" : "bg-muted-foreground/40"
+            }`}
+            style={{ height: `${h}px` }}
+          />
+        ))}
+      </div>
+    </button>
+  );
+};
 
 const MessagesPage = () => {
   const { user } = useAuth();
@@ -28,11 +79,18 @@ const MessagesPage = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(searchParams.get("user"));
   const [selectedName, setSelectedName] = useState(searchParams.get("name") || "");
+  const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Voice recording state
+  const [recording, setRecording] = useState(false);
+  const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
+  const [sending, setSending] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -55,7 +113,7 @@ const MessagesPage = () => {
       if (!convMap.has(otherId)) {
         convMap.set(otherId, {
           user_id: otherId,
-          last_message: msg.content || "🎤 Voice",
+          last_message: (msg as any).voice_url ? "🎤 Voice message" : (msg.content || "🎤 Voice message"),
           last_at: msg.created_at,
           unread: msg.receiver_id === user.id && !msg.read ? 1 : 0,
         });
@@ -121,14 +179,55 @@ const MessagesPage = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !user || !selectedUser) return;
-    await supabase.from("messages").insert({
-      sender_id: user.id,
-      receiver_id: selectedUser,
-      content: newMessage.trim(),
-    } as any);
-    setNewMessage("");
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        setRecordingBlob(new Blob(chunksRef.current, { type: "audio/webm" }));
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      mr.start();
+      setRecording(true);
+    } catch {
+      toast.error("Microphone access denied");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+    setRecording(false);
+  };
+
+  const sendVoiceMessage = async () => {
+    if (!recordingBlob || !user || !selectedUser) return;
+    setSending(true);
+    try {
+      const fileName = `${user.id}/${Date.now()}.webm`;
+      const { error: uploadError } = await supabase.storage
+        .from("voice_messages")
+        .upload(fileName, recordingBlob, { contentType: "audio/webm" });
+      if (uploadError) throw uploadError;
+
+      const voiceUrl = supabase.storage.from("voice_messages").getPublicUrl(fileName).data.publicUrl;
+
+      const { error } = await supabase.from("messages").insert({
+        sender_id: user.id,
+        receiver_id: selectedUser,
+        content: null,
+        voice_url: voiceUrl,
+      } as any);
+
+      if (error) throw error;
+      setRecordingBlob(null);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send voice message");
+    } finally {
+      setSending(false);
+    }
   };
 
   const searchUsers = async (query: string) => {
@@ -143,75 +242,132 @@ const MessagesPage = () => {
     setSearchResults(data || []);
   };
 
-  const selectConversation = (userId: string, name: string) => {
+  const selectConversation = (userId: string, name: string, avatarUrl?: string | null) => {
     setSelectedUser(userId);
     setSelectedName(name);
+    setSelectedAvatarUrl(avatarUrl || null);
     setSearchQuery("");
     setSearchResults([]);
   };
 
   if (selectedUser) {
+    const initials = (selectedName || "U").slice(0, 2).toUpperCase();
     return (
-      <div className="min-h-screen pb-24 flex flex-col">
-        <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl px-4 py-3 flex items-center gap-3 border-b border-border/50">
-          <button onClick={() => setSelectedUser(null)} className="text-muted-foreground hover:text-foreground">
+      <div
+        className="flex flex-col bg-background"
+        style={{ height: "100%", paddingTop: "env(safe-area-inset-top, 0px)" }}
+      >
+        <header className="shrink-0 bg-background px-4 py-2.5 flex items-center gap-3 border-b border-border/50">
+          <button onClick={() => { setSelectedUser(null); loadConversations(); }} className="text-muted-foreground hover:text-foreground">
             <ArrowLeft size={22} />
           </button>
-          <div className="w-8 h-8 rounded-full gradient-coral flex items-center justify-center text-xs font-bold text-primary-foreground">
-            {selectedName.slice(0, 2).toUpperCase()}
-          </div>
+          {selectedAvatarUrl ? (
+            <img src={selectedAvatarUrl} alt="" className="w-9 h-9 rounded-full object-cover border border-border/30" />
+          ) : (
+            <div className="w-9 h-9 rounded-full gradient-coral flex items-center justify-center text-xs font-bold text-primary-foreground">
+              {initials}
+            </div>
+          )}
           <span className="font-medium text-foreground">{selectedName}</span>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex ${msg.sender_id === user?.id ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${
-                  msg.sender_id === user?.id
-                    ? "gradient-coral text-primary-foreground rounded-br-md"
-                    : "bg-secondary text-foreground rounded-bl-md"
-                }`}
-              >
-                {msg.content}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full py-16 gap-3">
+              <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center">
+                <Mic size={24} className="text-muted-foreground" />
               </div>
-            </motion.div>
-          ))}
+              <p className="text-sm text-muted-foreground text-center">
+                Send your first voice message!<br />
+                <span className="text-xs">Tap the mic to record 🎤</span>
+              </p>
+            </div>
+          )}
+          {messages.map((msg) => {
+            const isMe = msg.sender_id === user?.id;
+            return (
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex items-end gap-2 ${isMe ? "justify-end" : "justify-start"}`}
+              >
+                {!isMe && (
+                  selectedAvatarUrl ? (
+                    <img src={selectedAvatarUrl} alt="" className="w-7 h-7 rounded-full object-cover border border-border/30 shrink-0 mb-0.5" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full gradient-coral flex items-center justify-center text-[10px] font-bold text-primary-foreground shrink-0 mb-0.5">
+                      {initials}
+                    </div>
+                  )
+                )}
+                {(msg as any).voice_url ? (
+                  <VoiceMessageBubble url={(msg as any).voice_url} isMe={isMe} />
+                ) : msg.content ? (
+                  <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm ${isMe ? "gradient-coral text-primary-foreground rounded-br-md" : "bg-secondary text-foreground rounded-bl-md"}`}>
+                    {msg.content}
+                  </div>
+                ) : null}
+              </motion.div>
+            );
+          })}
           <div ref={bottomRef} />
         </div>
 
-        <div className="sticky bottom-20 px-4 py-3 bg-background/80 backdrop-blur-xl border-t border-border/50">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Your message..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              className="flex-1 bg-secondary rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50"
-            />
+        {/* Voice-only input bar */}
+        <div
+          className="shrink-0 px-4 py-3 bg-background border-t border-border/50 mb-16 flex items-center gap-3"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+        >
+          {recordingBlob ? (
+            <div className="flex-1 flex items-center gap-2 bg-secondary rounded-2xl px-4 py-2.5">
+              <Mic size={16} className="text-primary shrink-0" />
+              <div className="flex gap-[2px] flex-1 items-center h-5">
+                {Array.from({ length: 20 }, (_, i) => (
+                  <div key={i} className="w-[2px] rounded-full bg-primary" style={{ height: `${6 + Math.random() * 10}px` }} />
+                ))}
+              </div>
+              <span className="text-xs text-primary font-medium">Ready</span>
+              <button onClick={() => setRecordingBlob(null)} className="text-xs text-destructive ml-1">✕</button>
+            </div>
+          ) : (
+            <div className={`flex-1 flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 ${recording ? "bg-primary/10 border border-primary/30" : "bg-secondary"}`}>
+              <Mic size={16} className={recording ? "text-primary" : "text-muted-foreground"} />
+              <span className={`text-sm ${recording ? "text-primary font-medium animate-pulse" : "text-muted-foreground"}`}>
+                {recording ? "Recording… tap ■ to stop" : "Tap the mic to record a voice message"}
+              </span>
+            </div>
+          )}
+
+          <button
+            onPointerDown={!recordingBlob && !recording ? startRecording : undefined}
+            onClick={recording ? stopRecording : undefined}
+            className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all shadow-sm ${
+              recording ? "bg-destructive scale-110" : recordingBlob ? "bg-secondary" : "gradient-coral"
+            }`}
+          >
+            {recording ? <Square size={16} className="text-white" /> : <Mic size={20} className={recordingBlob ? "text-muted-foreground" : "text-primary-foreground"} />}
+          </button>
+
+          {recordingBlob && (
             <button
-              onClick={sendMessage}
-              disabled={!newMessage.trim()}
-              className="w-11 h-11 rounded-xl gradient-coral flex items-center justify-center text-primary-foreground shadow-coral disabled:opacity-50"
+              onClick={sendVoiceMessage}
+              disabled={sending}
+              className="w-12 h-12 rounded-full gradient-coral flex items-center justify-center shrink-0 shadow-coral disabled:opacity-50"
             >
-              <Send size={18} />
+              {sending ? <Loader2 size={18} className="text-primary-foreground animate-spin" /> : <Send size={18} className="text-primary-foreground" />}
             </button>
-          </div>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-24 px-4 pt-4">
+    <div className="min-h-screen pb-24 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}>
       <header className="mb-4">
         <h1 className="text-2xl font-bold font-display text-gradient-red">Messages</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">Voice messages only 🎤</p>
       </header>
 
       <div className="relative mb-4">
@@ -228,12 +384,16 @@ const MessagesPage = () => {
             {searchResults.map((u: any) => (
               <button
                 key={u.id}
-                onClick={() => selectConversation(u.id, u.display_name || "User")}
+                onClick={() => selectConversation(u.id, u.display_name || "User", u.avatar_url)}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors"
               >
-                <div className="w-8 h-8 rounded-full gradient-coral flex items-center justify-center text-xs font-bold text-primary-foreground">
-                  {(u.display_name || "U").slice(0, 2).toUpperCase()}
-                </div>
+                {u.avatar_url ? (
+                  <img src={u.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover border border-border/30" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full gradient-coral flex items-center justify-center text-xs font-bold text-primary-foreground">
+                    {(u.display_name || "U").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <span className="text-sm text-foreground">{u.display_name || "User"}</span>
               </button>
             ))}
@@ -243,21 +403,30 @@ const MessagesPage = () => {
 
       <div className="space-y-2">
         {conversations.length === 0 && (
-          <p className="text-center text-muted-foreground text-sm py-12">
-            No conversations yet. Search for a user to start chatting!
-          </p>
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center">
+              <Mic size={28} className="text-muted-foreground" />
+            </div>
+            <p className="text-center text-muted-foreground text-sm">
+              No conversations yet.<br />Search for a user to start a voice chat!
+            </p>
+          </div>
         )}
         {conversations.map((conv) => (
           <motion.button
             key={conv.user_id}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            onClick={() => selectConversation(conv.user_id, conv.display_name)}
+            onClick={() => selectConversation(conv.user_id, conv.display_name, conv.avatar_url)}
             className="w-full flex items-center gap-3 bg-card rounded-xl p-4 hover:bg-card-hover transition-colors text-left"
           >
-            <div className="w-11 h-11 rounded-full gradient-coral flex items-center justify-center text-sm font-bold text-primary-foreground shrink-0">
-              {conv.display_name.slice(0, 2).toUpperCase()}
-            </div>
+            {conv.avatar_url ? (
+              <img src={conv.avatar_url} alt="" className="w-11 h-11 rounded-full object-cover border border-border/30 shrink-0" />
+            ) : (
+              <div className="w-11 h-11 rounded-full gradient-coral flex items-center justify-center text-sm font-bold text-primary-foreground shrink-0">
+                {conv.display_name.slice(0, 2).toUpperCase()}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-sm text-foreground">{conv.display_name}</span>

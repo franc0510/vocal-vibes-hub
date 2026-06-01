@@ -27,11 +27,13 @@ const ProfilePage = () => {
     setUploading(true);
     try {
       const ext = file.name.split(".").pop();
-      const path = `${user.id}/avatar.${ext}`;
+      const path = `${user.id}/avatar_${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
-      const { error: updateError } = await supabase.from("profiles").update({ avatar_url: publicUrl } as any).eq("id", user.id);
+      // Add cache buster to force refresh
+      const urlWithCacheBust = `${publicUrl}?t=${Date.now()}`;
+      const { error: updateError } = await supabase.from("profiles").update({ avatar_url: urlWithCacheBust } as any).eq("id", user.id);
       if (updateError) throw updateError;
       await refreshProfile();
       toast.success("Profile picture updated!");
@@ -39,6 +41,8 @@ const ProfilePage = () => {
       toast.error(err.message);
     } finally {
       setUploading(false);
+      // Reset file input so same file can be selected again
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -47,7 +51,7 @@ const ProfilePage = () => {
     : "ME";
 
   return (
-    <div className="min-h-screen pb-24 px-4 pt-4">
+    <div className="min-h-screen pb-24 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}>
       <header className="flex items-center justify-between mb-4">
         <h1 className="text-lg font-bold font-display text-foreground">
           @{profile?.username || user?.email?.split("@")[0] || "myprofile"}
@@ -94,6 +98,9 @@ const ProfilePage = () => {
 
       <div className="mb-4">
         <p className="text-sm font-bold text-foreground">{profile?.display_name || "My Profile"}</p>
+        {profile?.username && (
+          <p className="text-xs text-muted-foreground mt-0.5">@{profile.username}</p>
+        )}
         <p className="text-xs text-muted-foreground mt-0.5">{profile?.bio || "Voice enthusiast 🎤"}</p>
       </div>
 

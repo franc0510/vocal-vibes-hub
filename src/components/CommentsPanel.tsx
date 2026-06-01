@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, Mic, Square, Play, Pause, Loader2 } from "lucide-react";
+import { X, Mic, Square, Play, Pause, Loader2, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { playExclusive, releaseAudio } from "@/lib/audioManager";
 
 interface Comment {
   id: string;
@@ -12,6 +13,8 @@ interface Comment {
   created_at: string;
   author_name: string;
   author_avatar: string;
+  likes_count: number;
+  isLiked: boolean;
 }
 
 interface CommentsPanelProps {
@@ -38,11 +41,12 @@ const VoiceComment = ({ url }: { url: string }) => {
   const toggle = () => {
     if (!audioRef.current) {
       audioRef.current = new Audio(url);
-      audioRef.current.onended = () => setPlaying(false);
+      audioRef.current.onended = () => { setPlaying(false); releaseAudio(audioRef.current); };
+      audioRef.current.onpause = () => setPlaying(false);
+      audioRef.current.onplay = () => setPlaying(true);
     }
-    if (playing) audioRef.current.pause();
-    else audioRef.current.play();
-    setPlaying(!playing);
+    if (playing) { audioRef.current.pause(); releaseAudio(audioRef.current); }
+    else playExclusive(audioRef.current);
   };
 
   return (
@@ -61,7 +65,6 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
@@ -85,12 +88,85 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
       .in("id", userIds);
     const pMap = new Map((profiles || []).map((p) => [p.id, p]));
 
+    // Fetch like counts and current user likes for all comments
+    const commentIds = rawComments.map((c) => c.id);
+    let likeCounts = new Map<string, number>();
+    let myLikes = new Set<string>();
+
+    if (commentIds.length > 0) {
+      // Get counts per comment
+      const { data: allLikes } = await (supabase as any)
+        .from("comment_likes")
+        .select("comment_id")
+        .in("comment_id", commentIds);
+
+      if (allLikes) {
+        for (const like of allLikes as any[]) {
+          likeCounts.set(like.comment_id, (likeCounts.get(like.comment_id) || 0) + 1);
+        }
+      }
+
+      // Get current user's likes
+      if (user) {
+        const { data: userLikes } = await (supabase as any)
+          .from("comment_likes")
+          .select("comment_id")
+          .eq("user_id", user.id)
+          .in("comment_id", commentIds);
+        if (userLikes) {
+          for (const like of userLikes as any[]) myLikes.add(like.comment_id);
+        }
+      }
+    }
+
     setComments(rawComments.map((c) => {
       const p = pMap.get(c.user_id);
       const initials = (p?.display_name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
-      return { id: c.id, content: c.content, voice_url: c.voice_url, created_at: c.created_at, author_name: p?.display_name || "User", author_avatar: initials };
+      return {
+        id: c.id,
+        content: c.content,
+        voice_url: c.voice_url,
+        created_at: c.created_at,
+        author_name: p?.display_name || "User",
+        author_avatar: initials,
+        likes_count: likeCounts.get(c.id) || 0,
+        isLiked: myLikes.has(c.id),
+      };
     }));
     setLoading(false);
+  };
+
+  const toggleCommentLike = async (commentId: string) => {
+    if (!user) { toast.error("Sign in to like"); return; }
+    const comment = comments.find((c) => c.id === commentId);
+    if (!comment) return;
+
+    const newLiked = !comment.isLiked;
+    // Optimistic update
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? { ...c, isLiked: newLiked, likes_count: newLiked ? c.likes_count + 1 : Math.max(0, c.likes_count - 1) }
+          : c
+      )
+    );
+
+    try {
+      if (newLiked) {
+        await (supabase as any).from("comment_likes").insert({ comment_id: commentId, user_id: user.id });
+      } else {
+        await (supabase as any).from("comment_likes").delete().eq("comment_id", commentId).eq("user_id", user.id);
+      }
+    } catch {
+      // Revert on error
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, isLiked: !newLiked, likes_count: !newLiked ? c.likes_count + 1 : Math.max(0, c.likes_count - 1) }
+            : c
+        )
+      );
+    }
   };
 
   useEffect(() => {
@@ -120,7 +196,7 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
 
   const sendComment = async () => {
     if (!user) return;
-    if (!text.trim() && !recordingBlob) return;
+    if (!recordingBlob) return;
     setSending(true);
 
     try {
@@ -135,12 +211,11 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
       const { error } = await supabase.from("comments").insert({
         post_id: postId,
         user_id: user.id,
-        content: text.trim() || null,
+        content: null,
         voice_url: voiceUrl,
       });
       if (error) throw error;
 
-      setText("");
       setRecordingBlob(null);
       onCommentAdded?.();
       fetchComments();
@@ -155,22 +230,24 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
     <AnimatePresence>
       {open && (
         <>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm" onClick={onClose} />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] bg-background/60 backdrop-blur-sm" onClick={onClose} />
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-2xl max-h-[85vh] flex flex-col max-w-lg mx-auto border-t border-border/50 pb-20"
+            className="fixed bottom-0 left-0 right-0 z-[71] bg-card rounded-t-2xl flex flex-col max-w-lg mx-auto border-t border-border/50"
+            style={{ maxHeight: "70vh" }}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border/30 shrink-0">
               <h3 className="text-sm font-bold font-display text-foreground">Comments</h3>
-              <button onClick={onClose} className="text-muted-foreground"><X size={18} /></button>
+              <button onClick={onClose} className="text-muted-foreground" aria-label="Close comments"><X size={18} /></button>
             </div>
 
             {/* Comments list */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ minHeight: 0 }}>
               {loading ? (
                 <div className="flex justify-center py-10"><div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
               ) : comments.length === 0 ? (
@@ -189,42 +266,69 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
                       {c.content && <p className="text-xs text-foreground/80 mt-0.5">{c.content}</p>}
                       {c.voice_url && <div className="mt-1"><VoiceComment url={c.voice_url} /></div>}
                     </div>
+                    <button
+                      onClick={() => toggleCommentLike(c.id)}
+                      className="flex flex-col items-center gap-0.5 shrink-0 pt-1"
+                    >
+                      <Heart
+                        size={14}
+                        className={c.isLiked ? "fill-primary text-primary" : "text-muted-foreground"}
+                      />
+                      {c.likes_count > 0 && (
+                        <span className={`text-[9px] font-medium ${c.isLiked ? "text-primary" : "text-muted-foreground"}`}>
+                          {c.likes_count}
+                        </span>
+                      )}
+                    </button>
                   </div>
                 ))
               )}
             </div>
 
-            {/* Input */}
-            <div className="px-4 py-3 border-t border-border/30 flex items-center gap-2">
+            {/* Voice-only input */}
+            <div
+              className="px-4 py-3 border-t border-border/30 flex items-center gap-2 shrink-0 bg-card"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+            >
               {recordingBlob ? (
                 <div className="flex-1 flex items-center gap-2 bg-secondary rounded-xl px-3 py-2">
-                  <span className="text-xs text-foreground">🎤 Voice ready</span>
-                  <button onClick={() => setRecordingBlob(null)} className="text-xs text-destructive">Remove</button>
+                  <Mic size={14} className="text-primary shrink-0" />
+                  <div className="flex gap-[2px] flex-1 items-center h-4">
+                    {Array.from({ length: 16 }, (_, i) => (
+                      <div key={i} className="w-[2px] rounded-full bg-primary" style={{ height: `${4 + Math.random() * 8}px` }} />
+                    ))}
+                  </div>
+                  <span className="text-xs text-primary font-medium">Ready</span>
+                  <button onClick={() => setRecordingBlob(null)} className="text-xs text-destructive ml-1">✕</button>
                 </div>
               ) : (
-                <input
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendComment()}
-                  placeholder="Add a comment..."
-                  className="flex-1 bg-secondary rounded-xl px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none"
-                />
+                <div className={`flex-1 flex items-center gap-2 rounded-xl px-3 py-2 ${recording ? "bg-primary/10 border border-primary/30" : "bg-secondary"}`}>
+                  <Mic size={13} className={recording ? "text-primary" : "text-muted-foreground"} />
+                  <span className={`text-xs ${recording ? "text-primary animate-pulse" : "text-muted-foreground"}`}>
+                    {recording ? "Recording… tap ■ to stop" : "Tap mic to record a voice comment"}
+                  </span>
+                </div>
               )}
 
               <button
-                onClick={recording ? stopRecording : startRecording}
-                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${recording ? "bg-primary" : "bg-secondary"}`}
+                onPointerDown={!recordingBlob && !recording ? startRecording : undefined}
+                onClick={recording ? stopRecording : undefined}
+                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                  recording ? "bg-destructive scale-110" : recordingBlob ? "bg-secondary" : "bg-primary"
+                }`}
               >
-                {recording ? <Square size={12} className="text-primary-foreground" /> : <Mic size={14} className="text-muted-foreground" />}
+                {recording ? <Square size={12} className="text-white" /> : <Mic size={14} className={recordingBlob ? "text-muted-foreground" : "text-primary-foreground"} />}
               </button>
 
-              <button
-                onClick={sendComment}
-                disabled={sending || (!text.trim() && !recordingBlob)}
-                className="w-8 h-8 rounded-full gradient-red flex items-center justify-center shrink-0 disabled:opacity-40"
-              >
-                {sending ? <Loader2 size={14} className="text-primary-foreground animate-spin" /> : <Send size={14} className="text-primary-foreground" />}
-              </button>
+              {recordingBlob && (
+                <button
+                  onClick={sendComment}
+                  disabled={sending}
+                  className="w-9 h-9 rounded-full gradient-red flex items-center justify-center shrink-0 disabled:opacity-40"
+                >
+                  {sending ? <Loader2 size={13} className="text-primary-foreground animate-spin" /> : <Mic size={14} className="text-primary-foreground" />}
+                </button>
+              )}
             </div>
           </motion.div>
         </>

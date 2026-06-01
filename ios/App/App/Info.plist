@@ -26,6 +26,14 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>VocMe a besoin du microphone pour enregistrer vos vocaux</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>VocMe utilise votre localisation pour l'associer à vos VocMe.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>VocMe a besoin d'accéder à vos photos pour ajouter un fond à vos VocMe.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>VocMe a besoin d'enregistrer des photos dans votre galerie.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>VocMe a besoin de la caméra pour ajouter une photo à vos VocMe.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -49,6 +57,8 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDarkContent</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>VocMe a besoin d'accéder au microphone pour enregistrer vos histoires vocales.</string>
     <key>UIBackgroundModes</key>

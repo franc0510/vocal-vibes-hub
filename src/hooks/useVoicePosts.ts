@@ -12,6 +12,10 @@ export interface VoicePostWithAuthor {
   comments_count: number;
   shares_count: number;
   created_at: string;
+  transcription?: string | null;
+  image_url?: string | null;
+  location?: string | null;
+  group_id?: string | null;
   author: {
     name: string;
     username: string;
@@ -21,10 +25,33 @@ export interface VoicePostWithAuthor {
   isLiked: boolean;
 }
 
+const CACHE_KEY = "vocme_feed_cache_v1";
+
+const readCache = (): VoicePostWithAuthor[] => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeCache = (posts: VoicePostWithAuthor[]) => {
+  try {
+    // Only cache the first 10 to keep it light + fast
+    localStorage.setItem(CACHE_KEY, JSON.stringify(posts.slice(0, 10)));
+  } catch {
+    /* ignore quota errors */
+  }
+};
+
 export const useVoicePosts = () => {
   const { user } = useAuth();
-  const [posts, setPosts] = useState<VoicePostWithAuthor[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Hydrate instantly from cache so the first reals appear immediately
+  const [posts, setPosts] = useState<VoicePostWithAuthor[]>(() => readCache());
+  const [loading, setLoading] = useState(() => readCache().length === 0);
   const shuffledOrderRef = useRef<string[]>([]);
 
   const fetchPosts = async () => {
@@ -42,27 +69,44 @@ export const useVoicePosts = () => {
 
     // Get unique user ids
     const userIds = [...new Set(postsData.map((p) => p.user_id))];
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name, username, avatar_url")
-      .in("id", userIds);
+    const postIds = postsData.map((p) => p.id);
 
-    const profileMap = new Map(
-      (profiles || []).map((p) => [p.id, p])
-    );
+    // Run all the dependent lookups in PARALLEL (huge speed-up vs. the old
+    // per-post sequential count queries which made the first reals very slow).
+    const [
+      { data: profiles },
+      { data: allLikes },
+      { data: allComments },
+      { data: myLikes },
+      { data: listenedRows },
+    ] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, display_name, username, avatar_url")
+        .in("id", userIds),
+      supabase.from("voice_post_likes").select("post_id").in("post_id", postIds),
+      supabase.from("comments").select("post_id").in("post_id", postIds),
+      user
+        ? supabase.from("voice_post_likes").select("post_id").eq("user_id", user.id)
+        : Promise.resolve({ data: [] as { post_id: string }[] }),
+      user
+        ? supabase.from("listened_posts").select("post_id").eq("user_id", user.id)
+        : Promise.resolve({ data: [] as { post_id: string }[] }),
+    ]);
 
-    // Get user's likes
-    let likedPostIds = new Set<string>();
-    if (user) {
-      const { data: likes } = await supabase
-        .from("voice_post_likes")
-        .select("post_id")
-        .eq("user_id", user.id);
-      likedPostIds = new Set((likes || []).map((l) => l.post_id));
-    }
+    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+    // Tally like & comment counts client-side from the two batch queries
+    const likeCountMap = new Map<string, number>();
+    for (const l of allLikes || []) likeCountMap.set(l.post_id, (likeCountMap.get(l.post_id) || 0) + 1);
+    const commentCountMap = new Map<string, number>();
+    for (const c of allComments || []) commentCountMap.set(c.post_id, (commentCountMap.get(c.post_id) || 0) + 1);
+
+    const likedPostIds = new Set((myLikes || []).map((l: any) => l.post_id));
+    const listenedPostIds = new Set((listenedRows || []).map((l: any) => l.post_id));
 
     const enrichedMap = new Map<string, VoicePostWithAuthor>();
-    postsData.forEach((p) => {
+    for (const p of postsData) {
       const profile = profileMap.get(p.user_id);
       const initials = (profile?.display_name || "U")
         .split(" ")
@@ -70,8 +114,14 @@ export const useVoicePosts = () => {
         .join("")
         .slice(0, 2)
         .toUpperCase();
+
       enrichedMap.set(p.id, {
         ...p,
+        likes_count: likeCountMap.get(p.id) ?? p.likes_count ?? 0,
+        comments_count: commentCountMap.get(p.id) ?? p.comments_count ?? 0,
+        transcription: (p as any).transcription || null,
+        image_url: (p as any).image_url || null,
+        location: (p as any).location || null,
         author: {
           name: profile?.display_name || "User",
           username: profile?.username ? `@${profile.username}` : "@user",
@@ -80,30 +130,51 @@ export const useVoicePosts = () => {
         },
         isLiked: likedPostIds.has(p.id),
       });
-    });
-
-    // Get listened post IDs for current user
-    let listenedPostIds = new Set<string>();
-    if (user) {
-      const { data: listened } = await supabase
-        .from("listened_posts")
-        .select("post_id")
-        .eq("user_id", user.id);
-      listenedPostIds = new Set((listened || []).map((l: any) => l.post_id));
     }
 
-    // Sort: unlistened first, then by likes_count descending
+    // Sort: unlistened first, then bucket by engagement score, randomize within each bucket
     const allEntries = [...enrichedMap.values()];
-    allEntries.sort((a, b) => {
-      const aListened = listenedPostIds.has(a.id) ? 1 : 0;
-      const bListened = listenedPostIds.has(b.id) ? 1 : 0;
-      if (aListened !== bListened) return aListened - bListened; // unlistened first
-      return b.likes_count - a.likes_count; // then by most liked
-    });
 
-    const ordered = allEntries;
+    // Shuffle helper
+    const shuffle = <T,>(arr: T[]): T[] => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
+
+    // Score = likes + comments (engagement)
+    const score = (p: VoicePostWithAuthor) => p.likes_count + p.comments_count;
+
+    // Bucket thresholds: [high(10+), medium(3-9), low(1-2), zero(0)]
+    const bucketize = (entries: VoicePostWithAuthor[]) => {
+      const high: VoicePostWithAuthor[] = [];
+      const medium: VoicePostWithAuthor[] = [];
+      const low: VoicePostWithAuthor[] = [];
+      const zero: VoicePostWithAuthor[] = [];
+
+      for (const e of entries) {
+        const s = score(e);
+        if (s >= 10) high.push(e);
+        else if (s >= 3) medium.push(e);
+        else if (s >= 1) low.push(e);
+        else zero.push(e);
+      }
+
+      return [...shuffle(high), ...shuffle(medium), ...shuffle(low), ...shuffle(zero)];
+    };
+
+    // Separate unlistened vs listened
+    const unlistened = allEntries.filter((p) => !listenedPostIds.has(p.id));
+    const listened = allEntries.filter((p) => listenedPostIds.has(p.id));
+
+    // Bucketize each group separately, unlistened first
+    const ordered = [...bucketize(unlistened), ...bucketize(listened)];
 
     setPosts(ordered);
+    writeCache(ordered);
     setLoading(false);
   };
 

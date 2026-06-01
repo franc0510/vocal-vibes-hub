@@ -1,11 +1,15 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, MessageCircle, Share2, Play, Pause, Trash2, Flag } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, Pause, Trash2, Flag, Gauge, MapPin, Crown, SkipBack, SkipForward } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import WaveformVisualizer from "./WaveformVisualizer";
 import CommentsPanel from "./CommentsPanel";
 import SharePanel from "./SharePanel";
+import LikesListModal from "./LikesListModal";
 import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWeeklyVocme } from "@/hooks/useWeeklyVocme";
+import { playExclusive, releaseAudio } from "@/lib/audioManager";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import defaultAvatarBg from "@/assets/default-avatar-bg.png";
@@ -36,20 +40,93 @@ const formatTime = (dateStr: string) => {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnded, onListened, commentCount }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onReport: () => void; onEnded: () => void; onListened: () => void; commentCount: number }) => {
+// Pre-warm an audio element (load without playing)
+const preloadAudio = (url: string): HTMLAudioElement => {
+  const audio = new Audio();
+  audio.crossOrigin = "anonymous";
+  audio.preload = "auto";
+  audio.src = url;
+  audio.load();
+  return audio;
+};
+
+const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnded, onListened, commentCount, onProfileClick, externalPause, onLikeCountPress, onNext, onPrev, preloadedAudio, isWinner }: { post: VoicePostWithAuthor; onCommentsOpen: () => void; onShareOpen: () => void; onDelete: () => void; onReport: () => void; onEnded: () => void; onListened: () => void; commentCount: number; onProfileClick: () => void; externalPause?: boolean; onLikeCountPress?: () => void; onNext?: () => void; onPrev?: () => void; preloadedAudio?: HTMLAudioElement | null; isWinner?: boolean }) => {
   const { user } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes_count);
   const [progress, setProgress] = useState(0);
   const [hasListened, setHasListened] = useState(false);
+  const [speed, setSpeed] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animRef = useRef<number>(0);
+  const seekBarRef = useRef<HTMLDivElement | null>(null);
+  const isSeekingRef = useRef(false);
   const waveform = useRef(generateWaveform(32)).current;
 
-  const avatarUrl = post.author.avatarUrl;
+  // --- Seek / scrubbing (video-like navigation) ---
+  const seekToClientX = (clientX: number) => {
+    const bar = seekBarRef.current;
+    const audio = audioRef.current;
+    if (!bar || !audio) return;
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const dur = audio.duration || post.duration || 1;
+    audio.currentTime = ratio * dur;
+    setProgress(ratio);
+  };
+  const handleSeekDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    isSeekingRef.current = true;
+    try { (e.target as HTMLElement).setPointerCapture(e.pointerId); } catch {}
+    seekToClientX(e.clientX);
+  };
+  const handleSeekMove = (e: React.PointerEvent) => {
+    if (!isSeekingRef.current) return;
+    e.stopPropagation();
+    seekToClientX(e.clientX);
+  };
+  const handleSeekUp = (e: React.PointerEvent) => {
+    if (!isSeekingRef.current) return;
+    e.stopPropagation();
+    isSeekingRef.current = false;
+  };
+  // Jump to start / end quickly
+  const jumpToStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (audioRef.current) { audioRef.current.currentTime = 0; setProgress(0); }
+  };
+  const jumpToEnd = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const audio = audioRef.current;
+    if (!audio) return;
+    const dur = audio.duration || post.duration || 0;
+    audio.currentTime = Math.max(0, dur - 0.3);
+    setProgress(1);
+  };
 
-  // Create and auto-play audio when post changes
+  // Cycle playback speed: 1x -> 1.5x -> 2x -> 1x
+  const cycleSpeed = () => {
+    setSpeed((prev) => {
+      const next = prev === 1 ? 1.5 : prev === 1.5 ? 2 : 1;
+      if (audioRef.current) audioRef.current.playbackRate = next;
+      return next;
+    });
+  };
+
+  // Pause audio when external pause is triggered (e.g. comments panel opened)
+  useEffect(() => {
+    if (externalPause && isPlaying && audioRef.current) {
+      audioRef.current.pause();
+      cancelAnimationFrame(animRef.current);
+      setIsPlaying(false);
+    }
+  }, [externalPause]);
+
+  const avatarUrl = post.author.avatarUrl;
+  const backgroundUrl = post.image_url || avatarUrl;
+
+  // Use preloaded audio (already loaded) or create new one
   useEffect(() => {
     // Clean up previous audio
     if (audioRef.current) {
@@ -61,10 +138,8 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
     setProgress(0);
     setHasListened(false);
 
-    // Create new audio element
-    const audio = new Audio();
-    audio.crossOrigin = "anonymous";
-    audio.preload = "auto";
+    // Use the preloaded audio element if available, otherwise create fresh
+    const audio = preloadedAudio ?? preloadAudio(post.audio_url);
     
     audio.onended = () => {
       setIsPlaying(false);
@@ -75,24 +150,18 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
     audio.onerror = (e) => {
       console.error("❌ Audio error:", e, audio.error);
     };
-    
-    audio.onloadedmetadata = () => {
-      console.log("✅ Audio loaded, duration:", audio.duration);
-    };
-    
-    // Set src and try autoplay
-    audio.src = post.audio_url;
+
     audioRef.current = audio;
     
-    // Try autoplay (works on real iPhone, fails on simulator)
+    // Try autoplay immediately (audio is already loaded if preloaded)
     const tryAutoPlay = async () => {
       try {
-        await audio.play();
+        audio.playbackRate = speed;
+        await playExclusive(audio);
         setIsPlaying(true);
         animRef.current = requestAnimationFrame(updateProgress);
       } catch (err) {
-        console.log("⚠️ Autoplay blocked (normal on simulator)");
-        // Silent fail - user can tap to play
+        console.log("⚠️ Autoplay blocked");
       }
     };
     
@@ -100,10 +169,45 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
 
     return () => {
       audio.pause();
-      audio.src = "";
+      releaseAudio(audio);
       cancelAnimationFrame(animRef.current);
     };
   }, [post.id]);
+
+  // Media Session API for lock screen controls
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: post.title,
+      artist: post.author.name,
+      album: "VocMe",
+      artwork: post.author.avatarUrl
+        ? [{ src: post.author.avatarUrl, sizes: "256x256", type: "image/png" }]
+        : [],
+    });
+
+    navigator.mediaSession.setActionHandler("play", () => {
+      if (audioRef.current) playExclusive(audioRef.current);
+      setIsPlaying(true);
+      animRef.current = requestAnimationFrame(updateProgress);
+    });
+    navigator.mediaSession.setActionHandler("pause", () => {
+      audioRef.current?.pause();
+      releaseAudio(audioRef.current);
+      cancelAnimationFrame(animRef.current);
+      setIsPlaying(false);
+    });
+    navigator.mediaSession.setActionHandler("nexttrack", () => { onNext?.(); });
+    navigator.mediaSession.setActionHandler("previoustrack", () => { onPrev?.(); });
+
+    return () => {
+      navigator.mediaSession.setActionHandler("play", null);
+      navigator.mediaSession.setActionHandler("pause", null);
+      navigator.mediaSession.setActionHandler("nexttrack", null);
+      navigator.mediaSession.setActionHandler("previoustrack", null);
+    };
+  }, [post.id, post.title, onNext, onPrev]);
 
   const updateProgress = () => {
     if (audioRef.current) {
@@ -133,12 +237,13 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
     
     if (isPlaying) {
       audio.pause();
+      releaseAudio(audio);
       cancelAnimationFrame(animRef.current);
       setIsPlaying(false);
     } else {
       console.log("▶️ Attempting to play...");
       try {
-        await audio.play();
+        await playExclusive(audio);
         console.log("✅ Playing!");
         setIsPlaying(true);
         animRef.current = requestAnimationFrame(updateProgress);
@@ -154,16 +259,28 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
     const newLiked = !liked;
     setLiked(newLiked);
     setLikeCount((c) => newLiked ? c + 1 : c - 1);
-    if (newLiked) await supabase.from("voice_post_likes").insert({ user_id: user.id, post_id: post.id });
-    else await supabase.from("voice_post_likes").delete().eq("user_id", user.id).eq("post_id", post.id);
+    try {
+      if (newLiked) await supabase.from("voice_post_likes").insert({ user_id: user.id, post_id: post.id });
+      else await supabase.from("voice_post_likes").delete().eq("user_id", user.id).eq("post_id", post.id);
+      // Refresh actual count from DB
+      const { count } = await supabase
+        .from("voice_post_likes")
+        .select("id", { count: "exact", head: true })
+        .eq("post_id", post.id);
+      if (count !== null) setLikeCount(count);
+    } catch {
+      setLiked(!newLiked);
+      setLikeCount((c) => newLiked ? c - 1 : c + 1);
+      toast.error("Failed to update like");
+    }
   };
 
   return (
     <div className="h-full w-full relative overflow-hidden flex flex-col">
-      {avatarUrl ? (
+      {backgroundUrl ? (
         <div className="absolute inset-0 z-0">
-          <img src={avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background/90" />
+          <img src={backgroundUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div className={`absolute inset-0 ${isWinner ? "bg-gradient-to-b from-amber-500/20 via-background/60 to-background/90" : "bg-gradient-to-b from-background/40 via-background/60 to-background/90"}`} />
         </div>
       ) : (
         <div className="absolute inset-0 z-0">
@@ -172,43 +289,119 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
         </div>
       )}
 
+      {/* VocMe of the week — golden glow border */}
+      {isWinner && (
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <div className="absolute inset-0 ring-4 ring-amber-400/60 ring-inset rounded-none animate-pulse" />
+          <motion.div
+            className="absolute inset-0"
+            style={{ boxShadow: "inset 0 0 80px rgba(251,191,36,0.4)" }}
+            animate={{ opacity: [0.4, 0.8, 0.4] }}
+            transition={{ duration: 2.5, repeat: Infinity }}
+          />
+        </div>
+      )}
+
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-20">
-        <div className="flex items-center gap-3 mb-8">
+        <div className="flex items-center gap-3 mb-3 cursor-pointer" onClick={onProfileClick}>
           {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-primary/30" />
+            <img src={avatarUrl} alt="" className={`w-12 h-12 rounded-full object-cover border-2 ${isWinner ? "border-amber-400" : "border-primary/30"}`} />
           ) : (
-            <div className="w-12 h-12 rounded-full gradient-red flex items-center justify-center text-sm font-bold text-primary-foreground border-2 border-primary/30">
+            <div className={`w-12 h-12 rounded-full gradient-red flex items-center justify-center text-sm font-bold text-primary-foreground border-2 ${isWinner ? "border-amber-400" : "border-primary/30"}`}>
               {post.author.avatar}
             </div>
           )}
           <div>
-            <p className="text-sm font-bold text-foreground">{post.author.name}</p>
+            <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+              {post.author.name}
+              {isWinner && <Crown size={14} className="text-amber-400 fill-amber-400" />}
+            </p>
             <p className="text-xs text-muted-foreground">{post.author.username} · {formatTime(post.created_at)}</p>
           </div>
         </div>
 
-        <h3 className="text-xl font-bold font-display text-foreground text-center mb-8 max-w-[280px] leading-snug">
+        {/* VocMe of the week badge */}
+        {isWinner && (
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/50 mb-3"
+          >
+            <Crown size={13} className="text-amber-400 fill-amber-400" />
+            <span className="text-[11px] font-bold text-amber-300">VocMe of the Week</span>
+          </motion.div>
+        )}
+
+        {/* Location badge */}
+        {post.location && (
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-card/50 backdrop-blur-sm border border-border/20 mb-3">
+            <MapPin size={11} className="text-primary" />
+            <span className="text-[11px] text-foreground/80 font-medium">{post.location}</span>
+          </div>
+        )}
+
+        <h3 className="text-xl font-bold font-display text-foreground text-center mb-6 max-w-[280px] leading-snug">
           {post.title}
         </h3>
 
         <motion.div
-          className="w-full max-w-[300px] bg-card/60 backdrop-blur-md rounded-2xl p-5 border border-border/30 shadow-elevated cursor-pointer mb-4"
-          whileTap={{ scale: 0.98 }}
-          onClick={togglePlay}
+          className="w-full max-w-[300px] bg-card/60 backdrop-blur-md rounded-2xl p-5 border border-border/30 shadow-elevated mb-4"
+          whileTap={{ scale: 0.99 }}
         >
-          <div className="w-full h-1 bg-secondary rounded-full mb-4 overflow-hidden">
-            <motion.div className="h-full gradient-red rounded-full" style={{ width: `${progress * 100}%` }} />
+          {/* Interactive seek bar (drag to scrub like a video) */}
+          <div
+            ref={seekBarRef}
+            onPointerDown={handleSeekDown}
+            onPointerMove={handleSeekMove}
+            onPointerUp={handleSeekUp}
+            className="relative w-full py-2 cursor-pointer touch-none"
+          >
+            <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
+              <div className="h-full gradient-red rounded-full" style={{ width: `${progress * 100}%` }} />
+            </div>
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-primary border-2 border-background shadow-md pointer-events-none"
+              style={{ left: `calc(${progress * 100}% - 7px)` }}
+            />
           </div>
-          <div className="h-16 flex items-center justify-center">
+          {/* Time labels */}
+          <div className="flex items-center justify-between mb-3 px-0.5">
+            <span className="text-[10px] text-muted-foreground font-medium tabular-nums">{formatDuration(Math.round(progress * post.duration))}</span>
+            <span className="text-[10px] text-muted-foreground font-medium tabular-nums">{formatDuration(post.duration)}</span>
+          </div>
+          <div className="h-14 flex items-center justify-center cursor-pointer" onClick={togglePlay}>
             <WaveformVisualizer bars={waveform} isPlaying={isPlaying} size="lg" color="coral" />
           </div>
           <div className="flex items-center justify-between mt-4">
-            <div className="w-10 h-10 rounded-full gradient-red flex items-center justify-center shadow-red">
-              {isPlaying ? <Pause size={18} className="text-primary-foreground" /> : <Play size={18} className="text-primary-foreground ml-0.5" />}
-            </div>
-            <span className="text-xs text-muted-foreground font-medium">{formatDuration(post.duration)}</span>
+            {/* Jump to start */}
+            <button onClick={jumpToStart} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+              <SkipBack size={15} />
+            </button>
+            {/* Play / Pause */}
+            <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-12 h-12 rounded-full gradient-red flex items-center justify-center shadow-red">
+              {isPlaying ? <Pause size={20} className="text-primary-foreground" /> : <Play size={20} className="text-primary-foreground ml-0.5" />}
+            </button>
+            {/* Jump to end */}
+            <button onClick={jumpToEnd} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+              <SkipForward size={15} />
+            </button>
+            {/* Speed control */}
+            <button
+              onClick={(e) => { e.stopPropagation(); cycleSpeed(); }}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full border transition-colors ${speed > 1 ? "bg-primary/20 border-primary/50 text-primary" : "bg-secondary border-border/30 text-muted-foreground"}`}
+            >
+              <Gauge size={13} />
+              <span className="text-xs font-bold">{speed}x</span>
+            </button>
           </div>
         </motion.div>
+
+        {/* Transcription / text */}
+        {post.transcription && (
+          <div className="w-full max-w-[300px] bg-card/40 backdrop-blur-sm rounded-xl px-4 py-3 border border-border/20">
+            <p className="text-xs text-foreground/80 leading-relaxed italic">"{post.transcription}"</p>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -217,7 +410,12 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
           <motion.div whileTap={{ scale: 1.4 }} className="w-11 h-11 rounded-full bg-card/60 backdrop-blur-sm border border-border/30 flex items-center justify-center">
             <Heart size={22} className={liked ? "fill-primary text-primary" : "text-foreground"} />
           </motion.div>
-          <span className={`text-[10px] font-medium ${liked ? "text-primary" : "text-muted-foreground"}`}>{formatCount(likeCount)}</span>
+          <span
+            onClick={(e) => { e.stopPropagation(); onLikeCountPress?.(); }}
+            className={`text-[10px] font-medium ${liked ? "text-primary" : "text-muted-foreground"} underline`}
+          >
+            {formatCount(likeCount)}
+          </span>
         </button>
 
         <button onClick={onCommentsOpen} className="flex flex-col items-center gap-1">
@@ -259,30 +457,86 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
 interface RealsViewerProps {
   filterFriends?: boolean;
   friendIds?: string[];
+  filterGroupId?: string;
+  filterAllGroups?: boolean;
 }
 
-const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps) => {
+const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, filterAllGroups = false }: RealsViewerProps) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { posts: allPosts, loading, refetch } = useVoicePosts();
+  const { winnerPostId } = useWeeklyVocme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [likesOpen, setLikesOpen] = useState(false);
   const [localCommentCounts, setLocalCommentCounts] = useState<Record<string, number>>({});
   const [reportOpen, setReportOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Cache of preloaded audio elements keyed by post id
+  const audioCache = useRef<Map<string, HTMLAudioElement>>(new Map());
 
-  const posts = filterFriends
+  const posts = filterGroupId
+    ? allPosts.filter((p) => (p as any).group_id === filterGroupId)
+    : filterAllGroups
+    ? allPosts.filter((p) => !!(p as any).group_id)
+    : filterFriends
     ? allPosts.filter((p) => friendIds.includes(p.user_id))
-    : allPosts;
+    : allPosts.filter((p) => !(p as any).group_id); // "For you" hides group-only posts
+
+  // Preload next (and prev) posts whenever currentIndex changes
+  useEffect(() => {
+    if (posts.length === 0) return;
+
+    const toPreload = [
+      posts[(currentIndex + 1) % posts.length],
+      posts[(currentIndex + 2) % posts.length],
+    ].filter(Boolean);
+
+    for (const p of toPreload) {
+      if (!audioCache.current.has(p.id)) {
+        audioCache.current.set(p.id, preloadAudio(p.audio_url));
+      }
+    }
+
+    // Evict old entries beyond a window of 6 to avoid memory bloat
+    const keepIds = new Set(posts.slice(Math.max(0, currentIndex - 2), currentIndex + 4).map((p) => p.id));
+    for (const [id, audio] of audioCache.current.entries()) {
+      if (!keepIds.has(id)) {
+        audio.pause();
+        audio.src = "";
+        audioCache.current.delete(id);
+      }
+    }
+  }, [currentIndex, posts]);
 
   const goNext = useCallback(() => {
     if (posts.length === 0) return;
     setCurrentIndex((i) => (i + 1) % posts.length);
   }, [posts.length]);
 
-  const goPrev = () => {
+  const goPrev = useCallback(async () => {
     if (posts.length === 0) return;
-    setCurrentIndex((i) => (i - 1 + posts.length) % posts.length);
-  };
+    if (currentIndex === 0) {
+      setIsRefreshing(true);
+      await refetch();
+      setIsRefreshing(false);
+      setCurrentIndex(Math.floor(Math.random() * Math.max(posts.length, 1)));
+      toast.success("Feed refreshed!");
+    } else {
+      setCurrentIndex((i) => i - 1);
+    }
+  }, [posts.length, currentIndex, refetch]);
+
+  const shuffleFeed = useCallback(async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+    if (posts.length > 0) {
+      setCurrentIndex(Math.floor(Math.random() * posts.length));
+    }
+    toast.success("Feed refreshed!");
+  }, [posts.length, refetch]);
 
   // Reset index when posts change
   useEffect(() => {
@@ -292,11 +546,31 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
   }, [posts.length, currentIndex]);
 
   const touchStartY = useRef(0);
-  const handleTouchStart = (e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY; };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const diff = touchStartY.current - e.changedTouches[0].clientY;
-    if (diff > 50) goNext();
-    else if (diff < -50) goPrev();
+  const touchStartX = useRef(0);
+  const lastTapRef = useRef(0);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = async (e: React.TouchEvent) => {
+    const diffY = touchStartY.current - e.changedTouches[0].clientY;
+    const diffX = Math.abs(touchStartX.current - e.changedTouches[0].clientX);
+    // Only treat as vertical swipe if Y movement dominates
+    if (Math.abs(diffY) > 40 && Math.abs(diffY) > diffX * 1.5) {
+      if (diffY > 0) goNext();
+      else await goPrev();
+    }
+  };
+
+  // Double-tap to shuffle
+  const handleDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 350) {
+      shuffleFeed();
+      lastTapRef.current = 0;
+    } else {
+      lastTapRef.current = now;
+    }
   };
 
   const handleDelete = async () => {
@@ -324,8 +598,11 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
   };
 
   const handleListened = async (postId: string) => {
-    if (!user) return;
-    await supabase.from("listened_posts").insert({ user_id: user.id, post_id: postId } as any).select().maybeSingle();
+    if (!user || !postId) return;
+    // Use upsert with onConflict to ignore duplicates gracefully
+    await (supabase as any)
+      .from("listened_posts")
+      .upsert({ user_id: user.id, post_id: postId }, { onConflict: "user_id,post_id", ignoreDuplicates: true });
   };
 
   if (loading) {
@@ -356,14 +633,22 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
       className="h-full w-full relative overflow-hidden bg-background"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onClick={handleDoubleTap}
     >
-      <AnimatePresence mode="wait">
+      {/* Pull to refresh indicator */}
+      {isRefreshing && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
+      <AnimatePresence mode="popLayout" initial={false}>
         <motion.div
           key={`${currentIndex}-${currentPost?.id}`}
-          initial={{ y: 60, opacity: 0 }}
+          initial={{ y: 50, opacity: 0.3 }}
           animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -60, opacity: 0 }}
-          transition={{ duration: 0.3 }}
+          exit={{ y: -50, opacity: 0 }}
+          transition={{ duration: 0.18, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="h-full"
         >
           <RealItem
@@ -375,6 +660,21 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
             onReport={() => setReportOpen(true)}
             onEnded={goNext}
             onListened={() => handleListened(currentPost?.id)}
+            externalPause={commentsOpen || shareOpen || likesOpen}
+            onLikeCountPress={() => setLikesOpen(true)}
+            onNext={goNext}
+            onPrev={goPrev}
+            preloadedAudio={audioCache.current.get(currentPost?.id) ?? null}
+            isWinner={!!winnerPostId && currentPost?.id === winnerPostId}
+            onProfileClick={() => {
+              if (currentPost?.user_id) {
+                if (user && currentPost.user_id === user.id) {
+                  navigate("/profile");
+                } else {
+                  navigate(`/user/${currentPost.user_id}`);
+                }
+              }
+            }}
           />
         </motion.div>
       </AnimatePresence>
@@ -393,6 +693,7 @@ const RealsViewer = ({ filterFriends = false, friendIds = [] }: RealsViewerProps
         }}
       />
       <SharePanel open={shareOpen} onClose={() => setShareOpen(false)} postId={currentPost?.id || ""} postTitle={currentPost?.title || ""} postAuthor={currentPost?.author.name || ""} />
+      <LikesListModal open={likesOpen} onClose={() => setLikesOpen(false)} postId={currentPost?.id || ""} />
 
       {/* Report Modal */}
       <AnimatePresence>

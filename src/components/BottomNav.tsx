@@ -1,4 +1,4 @@
-import { Home, Mic, MessageCircle, User, Search } from "lucide-react";
+import { Home, Mic, User, Search, Crown } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -8,7 +8,7 @@ const BottomNav = () => {
 
   const leftItems = [
     { icon: Home, label: "Feed", path: "/" },
-    { icon: MessageCircle, label: "Messages", path: "/messages" },
+    { icon: Crown, label: "Weekly", path: "/weekly" },
   ];
 
   const rightItems = [
@@ -32,14 +32,15 @@ const BottomNav = () => {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-      <div className="relative border-t border-border/50">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border/50">
+      <div className="relative">
         {/* Center record button */}
         <div className="absolute left-1/2 -translate-x-1/2 -top-8 z-10">
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => navigate("/record")}
             className="relative"
+            aria-label="Record"
           >
             <div className="w-16 h-16 rounded-full gradient-red flex items-center justify-center shadow-red ring-4 ring-background">
               <Mic size={26} className="text-primary-foreground" />
@@ -54,7 +55,7 @@ const BottomNav = () => {
         </div>
 
         {/* Bar */}
-        <div className="bg-background flex items-center justify-between px-2 pt-2 pb-1">
+        <div className="flex items-center justify-between px-2 pt-2 pb-1">
           <div className="flex items-center gap-1">
             {leftItems.map((item) => (
               <NavButton key={item.path} {...item} />
@@ -71,6 +72,8 @@ const BottomNav = () => {
           </div>
         </div>
       </div>
+      {/* Safe area bottom fill - fully opaque */}
+      <div className="bg-background" style={{ height: "env(safe-area-inset-bottom, 0px)" }} />
     </nav>
   );
 };

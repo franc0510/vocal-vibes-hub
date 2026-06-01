@@ -11,38 +11,35 @@ interface Profile {
   avatar_url: string | null;
 }
 
-interface FollowListModalProps {
+interface LikesListModalProps {
   open: boolean;
   onClose: () => void;
-  userId: string;
-  type: "followers" | "following";
+  postId: string;
 }
 
-const FollowListModal = ({ open, onClose, userId, type }: FollowListModalProps) => {
+const LikesListModal = ({ open, onClose, postId }: LikesListModalProps) => {
   const navigate = useNavigate();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!open || !userId) return;
+    if (!open || !postId) return;
     setProfiles([]);
     setLoading(true);
     const load = async () => {
       try {
-        const column = type === "followers" ? "follower_id" : "following_id";
-        const filterColumn = type === "followers" ? "following_id" : "follower_id";
-        const { data: follows, error: followsError } = await supabase
-          .from("follows")
-          .select(column)
-          .eq(filterColumn, userId);
+        const { data: likes, error } = await supabase
+          .from("voice_post_likes")
+          .select("user_id")
+          .eq("post_id", postId);
 
-        if (followsError || !follows || follows.length === 0) {
+        if (error || !likes || likes.length === 0) {
           setProfiles([]);
           setLoading(false);
           return;
         }
 
-        const ids = follows.map((f: any) => f[column]);
+        const ids = likes.map((l: any) => l.user_id);
         const { data: profilesData } = await supabase
           .from("profiles")
           .select("id, display_name, username, avatar_url")
@@ -56,7 +53,7 @@ const FollowListModal = ({ open, onClose, userId, type }: FollowListModalProps) 
       }
     };
     load();
-  }, [open, userId, type]);
+  }, [open, postId]);
 
   const handleUserClick = (id: string) => {
     onClose();
@@ -88,8 +85,12 @@ const FollowListModal = ({ open, onClose, userId, type }: FollowListModalProps) 
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between p-4 border-b border-border/30 shrink-0">
-                <h3 className="text-base font-bold font-display text-foreground capitalize">{type}</h3>
-                <button onClick={onClose} className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Close">
+                <h3 className="text-base font-bold font-display text-foreground">Likes</h3>
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground"
+                  aria-label="Close"
+                >
                   <X size={18} />
                 </button>
               </div>
@@ -101,11 +102,16 @@ const FollowListModal = ({ open, onClose, userId, type }: FollowListModalProps) 
                   </div>
                 ) : profiles.length === 0 ? (
                   <p className="text-center text-sm text-muted-foreground py-12">
-                    {type === "followers" ? "No followers yet" : "Not following anyone yet"}
+                    No likes yet
                   </p>
                 ) : (
                   profiles.map((p) => {
-                    const initials = (p.display_name || "U").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+                    const initials = (p.display_name || "U")
+                      .split(" ")
+                      .map((w) => w[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase();
                     return (
                       <button
                         key={p.id}
@@ -113,15 +119,23 @@ const FollowListModal = ({ open, onClose, userId, type }: FollowListModalProps) 
                         className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/60 transition-colors"
                       >
                         {p.avatar_url ? (
-                          <img src={p.avatar_url} alt="" className="w-11 h-11 rounded-full object-cover border border-border/30" />
+                          <img
+                            src={p.avatar_url}
+                            alt=""
+                            className="w-11 h-11 rounded-full object-cover border border-border/30"
+                          />
                         ) : (
                           <div className="w-11 h-11 rounded-full gradient-red flex items-center justify-center text-xs font-bold text-primary-foreground">
                             {initials}
                           </div>
                         )}
                         <div className="text-left">
-                          <p className="text-sm font-medium text-foreground">{p.display_name || "User"}</p>
-                          {p.username && <p className="text-xs text-muted-foreground">@{p.username}</p>}
+                          <p className="text-sm font-medium text-foreground">
+                            {p.display_name || "User"}
+                          </p>
+                          {p.username && (
+                            <p className="text-xs text-muted-foreground">@{p.username}</p>
+                          )}
                         </div>
                       </button>
                     );
@@ -136,4 +150,4 @@ const FollowListModal = ({ open, onClose, userId, type }: FollowListModalProps) 
   );
 };
 
-export default FollowListModal;
+export default LikesListModal;

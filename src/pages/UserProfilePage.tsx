@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Play, Pause, MessageCircle, X, UserPlus, UserCheck } from "lucide-react";
+import { ArrowLeft, Play, Pause, MessageCircle, X, UserPlus, UserCheck, Heart, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { playExclusive, releaseAudio } from "@/lib/audioManager";
 import { useFollows } from "@/hooks/useFollows";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
 import FollowListModal from "@/components/FollowListModal";
+import CommentsPanel from "@/components/CommentsPanel";
+import SharePanel from "@/components/SharePanel";
 
 interface Profile {
   id: string;
@@ -23,6 +26,7 @@ interface Post {
   duration: number;
   created_at: string;
   likes_count: number;
+  comments_count: number;
 }
 
 const generateWaveform = () => Array.from({ length: 24 }, () => 0.15 + Math.random() * 0.85);
@@ -42,59 +46,162 @@ const PostTile = ({ post, onSelect }: { post: Post; onSelect: () => void }) => (
 );
 
 const PostPlayer = ({ post, onClose }: { post: Post; onClose: () => void }) => {
+  const { user } = useAuth();
   const [playing, setPlaying] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(post.likes_count);
+  const [commentCount, setCommentCount] = useState(post.comments_count ?? 0);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const waveform = useRef(generateWaveform()).current;
+
+  // Check if user already liked
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("voice_post_likes")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("post_id", post.id)
+      .maybeSingle()
+      .then(({ data }) => setLiked(!!data));
+  }, [user?.id, post.id]);
+
+  // Fetch actual counts
+  useEffect(() => {
+    Promise.all([
+      supabase.from("voice_post_likes").select("id", { count: "exact", head: true }).eq("post_id", post.id),
+      supabase.from("comments").select("id", { count: "exact", head: true }).eq("post_id", post.id),
+    ]).then(([likesRes, commentsRes]) => {
+      if (likesRes.count !== null) setLikeCount(likesRes.count);
+      if (commentsRes.count !== null) setCommentCount(commentsRes.count);
+    });
+  }, [post.id]);
+
+  // Cleanup audio on unmount / close
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        releaseAudio(audioRef.current);
+        audioRef.current.src = "";
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleClose = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      releaseAudio(audioRef.current);
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    setPlaying(false);
+    onClose();
+  };
 
   const toggle = () => {
     if (!audioRef.current) {
       audioRef.current = new Audio(post.audio_url);
-      audioRef.current.onended = () => setPlaying(false);
+      audioRef.current.onended = () => { setPlaying(false); releaseAudio(audioRef.current); };
+      audioRef.current.onpause = () => setPlaying(false);
+      audioRef.current.onplay = () => setPlaying(true);
     }
-    if (playing) audioRef.current.pause();
-    else audioRef.current.play();
-    setPlaying(!playing);
+    if (playing) { audioRef.current.pause(); releaseAudio(audioRef.current); }
+    else playExclusive(audioRef.current);
+  };
+
+  const toggleLike = async () => {
+    if (!user) return;
+    const newLiked = !liked;
+    setLiked(newLiked);
+    setLikeCount((c) => newLiked ? c + 1 : c - 1);
+    try {
+      if (newLiked) await supabase.from("voice_post_likes").insert({ user_id: user.id, post_id: post.id });
+      else await supabase.from("voice_post_likes").delete().eq("user_id", user.id).eq("post_id", post.id);
+      const { count } = await supabase.from("voice_post_likes").select("id", { count: "exact", head: true }).eq("post_id", post.id);
+      if (count !== null) setLikeCount(count);
+    } catch {
+      setLiked(!newLiked);
+      setLikeCount((c) => newLiked ? c - 1 : c + 1);
+    }
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-    >
+    <>
       <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.8, opacity: 0 }}
-        className="w-full max-w-sm bg-card rounded-2xl p-5 border border-border/50 shadow-elevated"
-        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex items-center justify-center p-4"
+        onClick={handleClose}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-foreground font-display">{post.title}</h3>
-          <button onClick={onClose} className="text-muted-foreground"><X size={18} /></button>
-        </div>
-        <div
-          className="flex items-center gap-3 bg-secondary/60 rounded-xl p-4 cursor-pointer"
-          onClick={toggle}
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.8, opacity: 0 }}
+          className="w-full max-w-sm bg-card rounded-2xl p-5 border border-border/50 shadow-elevated"
+          onClick={(e) => e.stopPropagation()}
         >
-          <button className="w-11 h-11 rounded-full gradient-red flex items-center justify-center text-primary-foreground shrink-0 shadow-red">
-            {playing ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
-          </button>
-          <div className="flex-1 overflow-hidden h-10">
-            <WaveformVisualizer bars={waveform} isPlaying={playing} size="md" />
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-foreground font-display">{post.title}</h3>
+            <button onClick={handleClose} className="text-muted-foreground"><X size={18} /></button>
           </div>
-        </div>
-        <p className="text-xs text-muted-foreground mt-3 text-center">{formatDuration(post.duration)} · ❤️ {post.likes_count}</p>
+          <div
+            className="flex items-center gap-3 bg-secondary/60 rounded-xl p-4 cursor-pointer"
+            onClick={toggle}
+          >
+            <button className="w-11 h-11 rounded-full gradient-red flex items-center justify-center text-primary-foreground shrink-0 shadow-red">
+              {playing ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+            </button>
+            <div className="flex-1 overflow-hidden h-10">
+              <WaveformVisualizer bars={waveform} isPlaying={playing} size="md" />
+            </div>
+          </div>
+
+          {/* Stats: like, comment, share */}
+          <div className="flex items-center justify-around mt-4 pt-3 border-t border-border/30">
+            <button onClick={toggleLike} className="flex items-center gap-1.5">
+              <Heart size={18} className={liked ? "fill-primary text-primary" : "text-muted-foreground"} />
+              <span className={`text-xs font-medium ${liked ? "text-primary" : "text-muted-foreground"}`}>{likeCount}</span>
+            </button>
+            <button onClick={() => setCommentsOpen(true)} className="flex items-center gap-1.5">
+              <MessageCircle size={18} className="text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">{commentCount}</span>
+            </button>
+            <button onClick={() => setShareOpen(true)} className="flex items-center gap-1.5">
+              <Share2 size={18} className="text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Share</span>
+            </button>
+          </div>
+
+          <p className="text-[10px] text-muted-foreground mt-3 text-center">{formatDuration(post.duration)}</p>
+        </motion.div>
       </motion.div>
-    </motion.div>
+
+      <CommentsPanel
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        postId={post.id}
+        onCommentAdded={() => setCommentCount((c) => c + 1)}
+      />
+      <SharePanel
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        postId={post.id}
+        postTitle={post.title}
+        postAuthor=""
+      />
+    </>
   );
 };
 
 const UserProfilePage = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user: currentUser } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -116,6 +223,13 @@ const UserProfilePage = () => {
       setProfile(profileRes.data as Profile | null);
       setPosts((postsRes.data as Post[]) || []);
       setLoading(false);
+
+      // Auto-open a specific post if navigated from notification
+      const postIdParam = searchParams.get("postId");
+      if (postIdParam && postsRes.data) {
+        const matchedPost = (postsRes.data as Post[]).find((p) => p.id === postIdParam);
+        if (matchedPost) setSelectedPost(matchedPost);
+      }
     };
     load();
   }, [userId]);
@@ -140,7 +254,7 @@ const UserProfilePage = () => {
   const initials = (profile.display_name || "U").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen pb-24 px-4 pt-4">
+    <div className="min-h-screen pb-24 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}>
       <header className="flex items-center gap-3 mb-5">
         <button onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
           <ArrowLeft size={22} />

@@ -13,9 +13,18 @@ import ProfilePage from "@/pages/ProfilePage";
 import MessagesPage from "@/pages/MessagesPage";
 import AuthPage from "@/pages/AuthPage";
 import SettingsPage from "@/pages/SettingsPage";
+import GroupsPage from "@/pages/GroupsPage";
+import WeeklyPage from "@/pages/WeeklyPage";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useDailyNotification } from "@/hooks/useDailyNotification";
+import { useWeeklyNotifications } from "@/hooks/useWeeklyNotifications";
+import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
+import { useEffect } from "react";
+import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
+import { supabase } from "@/integrations/supabase/client";
 
 const queryClient = new QueryClient();
 
@@ -35,13 +44,43 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
 
 const AppRoutes = () => {
   useDailyNotification();
+  useWeeklyNotifications();
+  useRealtimeNotifications();
+
+  // Handle OAuth deep link callback on native platforms
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const handleAppUrlOpen = async ({ url }: { url: string }) => {
+      // Close the in-app browser
+      try { await Browser.close(); } catch {}
+
+      // Extract tokens from the URL hash/query
+      if (url.includes("access_token") || url.includes("refresh_token") || url.includes("#")) {
+        // Parse fragment from the deep link URL
+        const hashIndex = url.indexOf("#");
+        if (hashIndex >= 0) {
+          const fragment = url.substring(hashIndex + 1);
+          const params = new URLSearchParams(fragment);
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          }
+        }
+      }
+    };
+
+    CapApp.addListener("appUrlOpen", handleAppUrlOpen);
+    return () => {
+      CapApp.removeAllListeners();
+    };
+  }, []);
+
   return (
     <div className="w-screen h-screen flex flex-col bg-background" style={{ height: "100dvh" }}>
-      {/* Status bar spacer - même couleur que l'app */}
-      <div className="w-full bg-background shrink-0" style={{ height: "env(safe-area-inset-top, 0px)" }} />
-      
       <div className="w-full flex-1 overflow-auto min-h-0">
-        <div className="max-w-lg w-full mx-auto">
+        <div className="max-w-lg w-full mx-auto h-full">
           <Routes>
             <Route path="/auth" element={<AuthRoute><AuthPage /></AuthRoute>} />
             <Route path="/" element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
@@ -52,13 +91,13 @@ const AppRoutes = () => {
             <Route path="/post/:postId" element={<ProtectedRoute><PostPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/groups" element={<ProtectedRoute><GroupsPage /></ProtectedRoute>} />
+            <Route path="/weekly" element={<ProtectedRoute><WeeklyPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </div>
-      <div className="w-full">
-        <ProtectedNavWrapper />
-      </div>
+      <ProtectedNavWrapper />
     </div>
   );
 };

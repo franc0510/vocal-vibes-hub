@@ -7,7 +7,6 @@ const NOTIFICATION_ID = 1800;
 export const useDailyNotification = () => {
   useEffect(() => {
     const setup = async () => {
-      // Only run on native platforms or browsers that support notifications
       if (Capacitor.isNativePlatform()) {
         await setupNativeNotification();
       } else {
@@ -37,8 +36,8 @@ async function setupNativeNotification() {
     notifications: [
       {
         id: NOTIFICATION_ID,
-        title: "It's time ! HopHopHop your anecdote 🎙️",
-        body: "Partage ton anecdote du jour sur VocMe !",
+        title: "This is VocMe time! 🎙️",
+        body: "Tell your anecdote for today!",
         schedule: {
           on: { hour: 18, minute: 0 },
           every: "day",
@@ -62,8 +61,8 @@ async function setupWebNotification() {
   const checkAndNotify = () => {
     const now = new Date();
     if (now.getHours() === 18 && now.getMinutes() === 0) {
-      new Notification("It's time ! HopHopHop your anecdote 🎙️", {
-        body: "Partage ton anecdote du jour sur VocMe !",
+      new Notification("This is VocMe time! 🎙️", {
+        body: "Tell your anecdote for today!",
         icon: "/favicon.ico",
       });
     }

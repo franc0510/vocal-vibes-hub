@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Heart, MessageCircle, Share2, Play, Pause } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, Pause, Gauge, MapPin } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
 import { type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { playExclusive, releaseAudio } from "@/lib/audioManager";
 
 interface VoiceCardProps {
   post: VoicePostWithAuthor;
@@ -41,21 +42,31 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes_count);
+  const [speed, setSpeed] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const waveform = useRef(generateWaveform(32)).current;
+
+  const cycleSpeed = () => {
+    setSpeed((prev) => {
+      const next = prev === 1 ? 1.5 : prev === 1.5 ? 2 : 1;
+      if (audioRef.current) audioRef.current.playbackRate = next;
+      return next;
+    });
+  };
 
   const togglePlay = () => {
     if (!audioRef.current) {
       audioRef.current = new Audio(post.audio_url);
-      audioRef.current.onended = () => setIsPlaying(false);
+      audioRef.current.onended = () => { setIsPlaying(false); releaseAudio(audioRef.current); };
+      audioRef.current.onpause = () => setIsPlaying(false);
+      audioRef.current.onplay = () => setIsPlaying(true);
     }
+    audioRef.current.playbackRate = speed;
     if (isPlaying) {
       audioRef.current.pause();
-      setIsPlaying(false);
+      releaseAudio(audioRef.current);
     } else {
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch(() => {
+      playExclusive(audioRef.current).catch(() => {
         toast.error("Appuie à nouveau pour lancer le son");
       });
     }
@@ -70,10 +81,23 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
     setLiked(newLiked);
     setLikeCount((c) => newLiked ? c + 1 : c - 1);
 
-    if (newLiked) {
-      await supabase.from("voice_post_likes").insert({ user_id: user.id, post_id: post.id });
-    } else {
-      await supabase.from("voice_post_likes").delete().eq("user_id", user.id).eq("post_id", post.id);
+    try {
+      if (newLiked) {
+        await supabase.from("voice_post_likes").insert({ user_id: user.id, post_id: post.id });
+      } else {
+        await supabase.from("voice_post_likes").delete().eq("user_id", user.id).eq("post_id", post.id);
+      }
+      // Refresh actual count from DB for consistency
+      const { count } = await supabase
+        .from("voice_post_likes")
+        .select("id", { count: "exact", head: true })
+        .eq("post_id", post.id);
+      if (count !== null) setLikeCount(count);
+    } catch {
+      // Revert on error
+      setLiked(!newLiked);
+      setLikeCount((c) => newLiked ? c - 1 : c + 1);
+      toast.error("Failed to update like");
     }
   };
 
@@ -82,8 +106,16 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.08 }}
-      className="bg-card rounded-2xl p-4 shadow-card hover:shadow-elevated transition-shadow duration-200 border border-border/50"
+      className="relative bg-card rounded-2xl p-4 shadow-card hover:shadow-elevated transition-shadow duration-200 border border-border/50 overflow-hidden"
     >
+      {/* Optional photo background */}
+      {post.image_url && (
+        <div className="absolute inset-0 z-0">
+          <img src={post.image_url} alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-card/80 via-card/85 to-card/95" />
+        </div>
+      )}
+      <div className="relative z-10">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full gradient-red flex items-center justify-center text-sm font-bold text-primary-foreground font-display">
@@ -99,7 +131,16 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
         </span>
       </div>
 
-      <p className="text-foreground font-medium mb-3">{post.title}</p>
+      <p className="text-foreground font-medium mb-1">{post.title}</p>
+      {post.location && (
+        <div className="flex items-center gap-1 mb-2">
+          <MapPin size={11} className="text-primary" />
+          <span className="text-[11px] text-muted-foreground">{post.location}</span>
+        </div>
+      )}
+      {post.transcription && (
+        <p className="text-xs text-muted-foreground italic mb-3">"{post.transcription}"</p>
+      )}
 
       <div className="flex items-center gap-3 bg-secondary/60 rounded-xl p-3">
         <button
@@ -111,6 +152,13 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
         <div className="flex-1 overflow-hidden">
           <WaveformVisualizer bars={waveform} isPlaying={isPlaying} size="sm" />
         </div>
+        <button
+          onClick={cycleSpeed}
+          className={`flex items-center gap-1 px-2 py-1 rounded-full border shrink-0 transition-colors ${speed > 1 ? "bg-primary/20 border-primary/50 text-primary" : "bg-card border-border/40 text-muted-foreground"}`}
+        >
+          <Gauge size={12} />
+          <span className="text-[11px] font-bold">{speed}x</span>
+        </button>
       </div>
 
       <div className="flex items-center gap-6 mt-3 pt-3 border-t border-border/50">
@@ -131,6 +179,7 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
           <Share2 size={18} />
           <span>{formatCount(post.shares_count)}</span>
         </button>
+      </div>
       </div>
     </motion.div>
   );

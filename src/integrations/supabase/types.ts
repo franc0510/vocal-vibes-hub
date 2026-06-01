@@ -268,9 +268,12 @@ export type Database = {
           created_at: string
           duration: number
           id: string
+          image_url: string | null
           likes_count: number
+          location: string | null
           shares_count: number
           title: string
+          transcription: string | null
           user_id: string
           visibility: string
         }
@@ -280,9 +283,12 @@ export type Database = {
           created_at?: string
           duration?: number
           id?: string
+          image_url?: string | null
           likes_count?: number
+          location?: string | null
           shares_count?: number
           title: string
+          transcription?: string | null
           user_id: string
           visibility?: string
         }
@@ -292,11 +298,59 @@ export type Database = {
           created_at?: string
           duration?: number
           id?: string
+          image_url?: string | null
           likes_count?: number
+          location?: string | null
           shares_count?: number
           title?: string
+          transcription?: string | null
           user_id?: string
           visibility?: string
+        }
+        Relationships: []
+      }
+      voice_post_shares: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      vocme_votes: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          voter_id: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          voter_id: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          voter_id?: string
+          week_start?: string
         }
         Relationships: []
       }

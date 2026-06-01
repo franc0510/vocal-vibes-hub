@@ -8,12 +8,23 @@ const config: CapacitorConfig = {
     androidScheme: 'https'
   },
   ios: {
-    contentInset: 'always',
-    allowsLinkPreview: false
+    contentInset: 'never',
+    allowsLinkPreview: false,
+    backgroundColor: '#fafafa',
+    scrollEnabled: true
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 0
+    },
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#00000000',
+      overlaysWebView: true
+    },
+    Keyboard: {
+      resize: 'ionic',
+      resizeOnFullScreen: true
     }
   }
 };

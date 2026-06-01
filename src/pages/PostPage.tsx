@@ -5,6 +5,7 @@ import { ArrowLeft, Heart, MessageCircle, Share2, Play, Pause } from "lucide-rea
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { playExclusive, releaseAudio } from "@/lib/audioManager";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
 import CommentsPanel from "@/components/CommentsPanel";
 import SharePanel from "@/components/SharePanel";
@@ -78,6 +79,7 @@ const PostPage = () => {
     try {
       if (playing) {
         audio.pause();
+        releaseAudio(audio);
         cancelAnimationFrame(animRef.current);
         setPlaying(false);
       } else {
@@ -106,7 +108,7 @@ const PostPage = () => {
         }
 
         // Jouer l'audio
-        const playPromise = audio.play();
+        const playPromise = playExclusive(audio);
         if (playPromise !== undefined) {
           await playPromise;
         }
@@ -159,6 +161,7 @@ const PostPage = () => {
         onEnded={() => { 
           setPlaying(false); 
           setProgress(0); 
+          releaseAudio(audioRef.current);
           cancelAnimationFrame(animRef.current); 
         }}
         onError={(e) => {
@@ -179,7 +182,7 @@ const PostPage = () => {
         </div>
       )}
 
-      <div className="relative z-10 px-4 pt-3 pb-6">
+      <div className="relative z-10 px-4 pb-6" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
         {/* Header */}
         <header className="flex items-center gap-3 mb-8">
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-card/60 backdrop-blur-sm flex items-center justify-center text-foreground">

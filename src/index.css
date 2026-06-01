@@ -168,6 +168,8 @@ html, body {
   margin: 0;
   padding: 0;
   background: hsl(var(--background));
+  /* Étendre le fond sous la status bar et le home indicator */
+  -webkit-tap-highlight-color: transparent;
 }
 
 #root {
@@ -179,6 +181,9 @@ html, body {
   background: hsl(var(--background));
 }
 
-
-
-
+/* Force la couleur de fond dans les safe-area zones sur iOS */
+@supports (padding-top: env(safe-area-inset-top)) {
+  html, body {
+    background: hsl(var(--background));
+  }
+}
