@@ -1,0 +1,23 @@
+{
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/checkouts/swift-algorithms/Sources/Algorithms/Grouped.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Grouped.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Grouped.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Grouped.dia",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Grouped.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Grouped.swiftdeps"
+  },
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/checkouts/swift-algorithms/Sources/Algorithms/Indexed.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Indexed.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Indexed.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Indexed.dia",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Indexed.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Indexed.swiftdeps"
+  },
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/checkouts/swift-algorithms/Sources/Algorithms/Intersperse.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Intersperse.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Intersperse.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Intersperse.dia",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Intersperse.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Intersperse.swiftdeps"
+  }
+}

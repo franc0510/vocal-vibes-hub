@@ -1,0 +1,29 @@
+{
+  "" : {
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin-primary.dia",
+    "emit-module-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin-primary-emit-module.dia",
+    "pch" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin-primary.swiftdeps"
+  },
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/node_modules/@capacitor/device/ios/Sources/DevicePlugin/Device.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/Device.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/Device.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/Device.dia",
+    "index-unit-output-path" : "/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/Device.o",
+    "llvm-bc" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/Device.bc",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/Device.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/Device.swiftdeps",
+    "swiftmodule" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/Device~partial.swiftmodule"
+  },
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/node_modules/@capacitor/device/ios/Sources/DevicePlugin/DevicePlugin.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin.dia",
+    "index-unit-output-path" : "/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin.o",
+    "llvm-bc" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin.bc",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin.swiftdeps",
+    "swiftmodule" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorDevice.build/Debug-iphonesimulator/DevicePlugin.build/Objects-normal/arm64/DevicePlugin~partial.swiftmodule"
+  }
+}

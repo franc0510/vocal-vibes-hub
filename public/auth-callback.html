@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VocMe - Signing in...</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #ff6b6b;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h1 { margin-top: 20px; font-size: 24px; }
+    p { color: rgba(255,255,255,0.7); margin-top: 10px; }
+    .btn {
+      margin-top: 30px;
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+      border: none;
+      border-radius: 25px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <h1>Signing you in...</h1>
+  <p>Redirecting to VocMe app</p>
+  <a class="btn" href="vocme://auth/callback" id="openApp" style="display:none;">Open VocMe</a>
+
+  <script>
+    // Try to redirect to the app immediately
+    setTimeout(() => {
+      // Try deeplink
+      window.location.href = "vocme://auth/callback";
+      
+      // Show button as fallback after 2 seconds
+      setTimeout(() => {
+        document.getElementById('openApp').style.display = 'block';
+      }, 2000);
+    }, 500);
+  </script>
+</body>
+</html>

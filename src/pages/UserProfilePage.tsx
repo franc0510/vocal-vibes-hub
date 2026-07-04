@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Play, Pause, MessageCircle, X, UserPlus, UserCheck, Heart, Share2 } from "lucide-react";
+import { ArrowLeft, Play, Pause, MessageCircle, X, UserPlus, UserCheck, Heart, Share2, Flag, Ban, MoreVertical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { playExclusive, releaseAudio } from "@/lib/audioManager";
@@ -10,6 +10,8 @@ import WaveformVisualizer from "@/components/WaveformVisualizer";
 import FollowListModal from "@/components/FollowListModal";
 import CommentsPanel from "@/components/CommentsPanel";
 import SharePanel from "@/components/SharePanel";
+import LikesListModal from "@/components/LikesListModal";
+import { toast } from "sonner";
 
 interface Profile {
   id: string;
@@ -53,6 +55,7 @@ const PostPlayer = ({ post, onClose }: { post: Post; onClose: () => void }) => {
   const [commentCount, setCommentCount] = useState(post.comments_count ?? 0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [likesOpen, setLikesOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const waveform = useRef(generateWaveform()).current;
 
@@ -102,15 +105,25 @@ const PostPlayer = ({ post, onClose }: { post: Post; onClose: () => void }) => {
     onClose();
   };
 
+  // Pause when comments / share / likes panels open
+  useEffect(() => {
+    if ((commentsOpen || shareOpen || likesOpen) && audioRef.current && playing) {
+      audioRef.current.pause();
+      releaseAudio(audioRef.current);
+      setPlaying(false);
+    }
+  }, [commentsOpen, shareOpen, likesOpen]);
+
   const toggle = () => {
     if (!audioRef.current) {
       audioRef.current = new Audio(post.audio_url);
+      audioRef.current.crossOrigin = "anonymous";
       audioRef.current.onended = () => { setPlaying(false); releaseAudio(audioRef.current); };
       audioRef.current.onpause = () => setPlaying(false);
       audioRef.current.onplay = () => setPlaying(true);
     }
     if (playing) { audioRef.current.pause(); releaseAudio(audioRef.current); }
-    else playExclusive(audioRef.current);
+    else playExclusive(audioRef.current).catch(() => {});
   };
 
   const toggleLike = async () => {
@@ -136,7 +149,11 @@ const PostPlayer = ({ post, onClose }: { post: Post; onClose: () => void }) => {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex items-center justify-center p-4"
-        onClick={handleClose}
+        onClick={() => {
+          // Don't close PostPlayer if a sub-panel is open
+          if (commentsOpen || shareOpen || likesOpen) return;
+          handleClose();
+        }}
       >
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
@@ -163,16 +180,26 @@ const PostPlayer = ({ post, onClose }: { post: Post; onClose: () => void }) => {
 
           {/* Stats: like, comment, share */}
           <div className="flex items-center justify-around mt-4 pt-3 border-t border-border/30">
-            <button onClick={toggleLike} className="flex items-center gap-1.5">
-              <Heart size={18} className={liked ? "fill-primary text-primary" : "text-muted-foreground"} />
-              <span className={`text-xs font-medium ${liked ? "text-primary" : "text-muted-foreground"}`}>{likeCount}</span>
-            </button>
-            <button onClick={() => setCommentsOpen(true)} className="flex items-center gap-1.5">
-              <MessageCircle size={18} className="text-muted-foreground" />
+            <div className="flex items-center gap-2">
+              <button onClick={toggleLike} className="flex items-center gap-1.5" aria-label="Like">
+                <motion.div whileTap={{ scale: 1.3 }}>
+                  <Heart size={20} className={liked ? "fill-primary text-primary" : "text-muted-foreground"} />
+                </motion.div>
+              </button>
+              <button
+                onClick={() => setLikesOpen(true)}
+                className={`text-xs font-medium underline-offset-2 hover:underline ${liked ? "text-primary" : "text-muted-foreground"}`}
+                aria-label="See who liked"
+              >
+                {likeCount}
+              </button>
+            </div>
+            <button onClick={() => setCommentsOpen(true)} className="flex items-center gap-1.5" aria-label="Open comments">
+              <MessageCircle size={20} className="text-muted-foreground" />
               <span className="text-xs font-medium text-muted-foreground">{commentCount}</span>
             </button>
-            <button onClick={() => setShareOpen(true)} className="flex items-center gap-1.5">
-              <Share2 size={18} className="text-muted-foreground" />
+            <button onClick={() => setShareOpen(true)} className="flex items-center gap-1.5" aria-label="Share">
+              <Share2 size={20} className="text-muted-foreground" />
               <span className="text-xs font-medium text-muted-foreground">Share</span>
             </button>
           </div>
@@ -194,6 +221,11 @@ const PostPlayer = ({ post, onClose }: { post: Post; onClose: () => void }) => {
         postTitle={post.title}
         postAuthor=""
       />
+      <LikesListModal
+        open={likesOpen}
+        onClose={() => setLikesOpen(false)}
+        postId={post.id}
+      />
     </>
   );
 };
@@ -208,6 +240,7 @@ const UserProfilePage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
+  const [reportBlockOpen, setReportBlockOpen] = useState(false);
 
   const { isFollowing, followersCount, followingCount, toggleFollow, loading: followLoading } = useFollows(userId);
   const isOwnProfile = currentUser?.id === userId;
@@ -315,6 +348,13 @@ const UserProfilePage = () => {
             <MessageCircle size={16} />
             Message
           </button>
+          <button
+            onClick={() => setReportBlockOpen(true)}
+            className="w-11 flex items-center justify-center bg-secondary rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+            aria-label="Report or Block"
+          >
+            <MoreVertical size={18} />
+          </button>
         </div>
       )}
 
@@ -340,6 +380,116 @@ const UserProfilePage = () => {
           type={followListType || "followers"}
         />
       )}
+
+      {/* Report / Block Modal */}
+      {/* Report & Block Modal */}
+      <AnimatePresence>
+        {reportBlockOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md" 
+              onClick={() => setReportBlockOpen(false)} 
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 400 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-6"
+            >
+              <div className="bg-card rounded-2xl w-full max-w-sm overflow-hidden border border-border/50 shadow-2xl">
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border/30 bg-secondary/30">
+                  <h3 className="text-base font-bold text-foreground">Report or Block</h3>
+                  <button 
+                    onClick={() => setReportBlockOpen(false)} 
+                    className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Report Section */}
+                <div className="p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Flag size={16} className="text-red-500" />
+                    <span className="text-sm font-semibold text-foreground">Report this user</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    {["Harassment", "Hate speech", "Explicit", "Copyright", "Spam", "Other"].map((reason) => (
+                      <button
+                        key={reason}
+                        onClick={async () => {
+                          if (!currentUser || !userId) return;
+                          try {
+                            const { error } = await (supabase as any)
+                              .from("user_reports")
+                              .insert({ user_id: currentUser.id, reported_user_id: userId, reason, status: "pending" });
+                            if (error && error.code === "23505") {
+                              toast.info("Already reported");
+                            } else if (error) {
+                              throw error;
+                            } else {
+                              toast.success("Report submitted!");
+                            }
+                          } catch (err: any) {
+                            toast.error(err.message || "Failed to report");
+                          }
+                          setReportBlockOpen(false);
+                        }}
+                        className="px-3 py-2.5 rounded-xl text-xs font-medium text-red-600 bg-red-500/10 hover:bg-red-500/20 transition-all border border-red-500/20 hover:border-red-500/40"
+                      >
+                        {reason}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-xs text-muted-foreground">or</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+
+                  {/* Block Button */}
+                  <button
+                    onClick={async () => {
+                      if (!currentUser || !userId) return;
+                      try {
+                        const { error } = await (supabase as any)
+                          .from("blocks")
+                          .insert({ user_id: currentUser.id, blocked_user_id: userId });
+                        if (error && error.code !== "23505") throw error;
+                        toast.success("User blocked! Their content is now hidden.");
+                        setReportBlockOpen(false);
+                        navigate(-1);
+                      } catch (err: any) {
+                        toast.error(err.message || "Failed to block user");
+                      }
+                    }}
+                    className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold transition-colors text-sm flex items-center justify-center gap-2"
+                  >
+                    <Ban size={16} />
+                    Block this user
+                  </button>
+
+                  {/* Cancel */}
+                  <button
+                    onClick={() => setReportBlockOpen(false)}
+                    className="w-full mt-2 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

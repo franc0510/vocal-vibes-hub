@@ -1,0 +1,23 @@
+{
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/checkouts/swift-algorithms/Sources/Algorithms/AdjacentPairs.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/AdjacentPairs.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/AdjacentPairs.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/AdjacentPairs.dia",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/AdjacentPairs.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/AdjacentPairs.swiftdeps"
+  },
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/checkouts/swift-algorithms/Sources/Algorithms/Chain.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chain.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chain.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chain.dia",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chain.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chain.swiftdeps"
+  },
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/checkouts/swift-algorithms/Sources/Algorithms/Chunked.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chunked.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chunked.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chunked.dia",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chunked.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/Chunked.swiftdeps"
+  }
+}

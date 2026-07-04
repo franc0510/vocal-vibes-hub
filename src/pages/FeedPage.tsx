@@ -5,6 +5,7 @@ import NotificationsPanel from "@/components/NotificationsPanel";
 import RealsViewer from "@/components/RealsViewer";
 import { useFollows } from "@/hooks/useFollows";
 import { useGroups } from "@/hooks/useGroups";
+import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
 
 const FeedPage = () => {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ const FeedPage = () => {
   const [selectedGroupId, setSelectedGroupId] = useState<string>("all");
   const { followingIds } = useFollows();
   const { groups } = useGroups();
+  const { unreadCount } = useUnreadNotifications();
 
   return (
     <div className="h-full w-full flex flex-col relative">
@@ -75,7 +77,11 @@ const FeedPage = () => {
               aria-label="Notifications"
             >
               <Heart size={18} />
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-red">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </div>

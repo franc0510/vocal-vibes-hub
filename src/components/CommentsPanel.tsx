@@ -36,26 +36,94 @@ const formatTime = (dateStr: string) => {
 
 const VoiceComment = ({ url }: { url: string }) => {
   const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const rafRef = useRef<number>(0);
 
-  const toggle = () => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio(url);
-      audioRef.current.onended = () => { setPlaying(false); releaseAudio(audioRef.current); };
-      audioRef.current.onpause = () => setPlaying(false);
-      audioRef.current.onplay = () => setPlaying(true);
+  // Build the audio element only once (per URL change) so iOS can warm it up.
+  useEffect(() => {
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.crossOrigin = "anonymous";
+    audio.src = url;
+    audio.load();
+    audio.onended = () => {
+      setPlaying(false);
+      setProgress(0);
+      cancelAnimationFrame(rafRef.current);
+      releaseAudio(audio);
+    };
+    audio.onpause = () => setPlaying(false);
+    audio.onplay = () => setPlaying(true);
+    audioRef.current = audio;
+    return () => {
+      audio.pause();
+      releaseAudio(audio);
+      audio.src = "";
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [url]);
+
+  const tick = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    const dur = a.duration || 1;
+    setProgress(a.currentTime / dur);
+    if (!a.paused) rafRef.current = requestAnimationFrame(tick);
+  };
+
+  const toggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const a = audioRef.current;
+    if (!a) return;
+
+    if (playing) {
+      a.pause();
+      releaseAudio(a);
+      cancelAnimationFrame(rafRef.current);
+      return;
     }
-    if (playing) { audioRef.current.pause(); releaseAudio(audioRef.current); }
-    else playExclusive(audioRef.current);
+
+    setLoading(true);
+    try {
+      await playExclusive(a);
+      rafRef.current = requestAnimationFrame(tick);
+    } catch {
+      toast.error("Impossible de lire ce vocal");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <button onClick={toggle} className="flex items-center gap-1.5 bg-secondary rounded-full px-3 py-1.5">
-      {playing ? <Pause size={12} className="text-primary" /> : <Play size={12} className="text-primary ml-0.5" />}
-      <div className="flex gap-[2px]">
-        {Array.from({ length: 12 }, (_, i) => (
-          <div key={i} className={`w-[2px] rounded-full ${playing ? "bg-primary animate-pulse" : "bg-muted-foreground/40"}`} style={{ height: `${8 + Math.random() * 10}px` }} />
-        ))}
+    <button
+      onClick={toggle}
+      className="flex items-center gap-2 bg-secondary rounded-full px-3 py-1.5 hover:bg-secondary/80 transition-colors max-w-full"
+    >
+      <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
+        {loading ? (
+          <Loader2 size={10} className="text-primary-foreground animate-spin" />
+        ) : playing ? (
+          <Pause size={10} className="text-primary-foreground" />
+        ) : (
+          <Play size={10} className="text-primary-foreground ml-[1px]" />
+        )}
+      </div>
+      <div className="flex items-center gap-[2px] flex-1 h-4 overflow-hidden">
+        {Array.from({ length: 14 }, (_, i) => {
+          const barHeight = 4 + ((i * 37) % 10);
+          const active = playing && progress * 14 >= i;
+          return (
+            <div
+              key={i}
+              className={`w-[2px] rounded-full transition-colors ${
+                active ? "bg-primary" : "bg-muted-foreground/40"
+              }`}
+              style={{ height: `${barHeight}px` }}
+            />
+          );
+        })}
       </div>
     </button>
   );
@@ -230,7 +298,7 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
     <AnimatePresence>
       {open && (
         <>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] bg-background/60 backdrop-blur-sm" onClick={onClose} />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] bg-background/60 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onClose(); }} />
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}

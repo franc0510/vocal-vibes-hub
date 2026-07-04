@@ -36,23 +36,41 @@ const SharePanel = ({ open, onClose, postId, postTitle, postAuthor }: SharePanel
     if (!user) return;
     setLoading(true);
 
-    // Get users we've messaged before
-    const { data: msgs } = await supabase
-      .from("messages")
-      .select("sender_id, receiver_id")
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .limit(200);
+    // Combined approach: 1) people we've already messaged AND 2) people we follow
+    const [{ data: msgs }, { data: follows }] = await Promise.all([
+      supabase
+        .from("messages")
+        .select("sender_id, receiver_id")
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .limit(200),
+      supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.id),
+    ]);
 
     const friendIds = new Set<string>();
     (msgs || []).forEach((m) => {
       if (m.sender_id !== user.id) friendIds.add(m.sender_id);
       if (m.receiver_id !== user.id) friendIds.add(m.receiver_id);
     });
+    (follows || []).forEach((f: any) => {
+      if (f.following_id) friendIds.add(f.following_id);
+    });
 
-    // Also search all users if no friends yet
+    // Fallback: if we have absolutely no contacts/follows, propose a few users
     const { data: profiles } = friendIds.size > 0
-      ? await supabase.from("profiles").select("id, display_name, avatar_url").in("id", Array.from(friendIds))
-      : await supabase.from("profiles").select("id, display_name, avatar_url").neq("id", user.id).limit(20);
+      ? await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", Array.from(friendIds))
+          .order("display_name", { ascending: true })
+      : await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .neq("id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(30);
 
     setFriends((profiles || []).map((p) => {
       const initials = (p.display_name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -118,13 +136,14 @@ const SharePanel = ({ open, onClose, postId, postTitle, postAuthor }: SharePanel
     <AnimatePresence>
       {open && (
         <>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm" onClick={onClose} />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-background/60 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onClose(); }} />
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-2xl max-h-[65vh] flex flex-col max-w-lg mx-auto border-t border-border/50"
+            className="fixed bottom-0 left-0 right-0 z-[61] bg-card rounded-t-2xl flex flex-col max-w-lg mx-auto border-t border-border/50"
+            style={{ height: "min(72vh, 560px)" }}
           >
             {/* Handle */}
             <div className="flex justify-center pt-2 pb-1">
@@ -151,27 +170,27 @@ const SharePanel = ({ open, onClose, postId, postTitle, postAuthor }: SharePanel
             </div>
 
             {/* Friends list */}
-            <div className="flex-1 overflow-y-auto px-4 py-1">
+            <div className="flex-1 overflow-y-auto px-4 py-1 min-h-0">
               {loading ? (
                 <div className="flex justify-center py-8"><div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
               ) : filtered.length === 0 ? (
                 <p className="text-center text-xs text-muted-foreground py-8">No friends found</p>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-1 pb-2">
                   {filtered.map((friend) => (
                     <div key={friend.id} className="flex items-center gap-3 py-2">
                       {friend.avatar_url ? (
-                        <img src={friend.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+                        <img src={friend.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
                       ) : (
-                        <div className="w-9 h-9 rounded-full gradient-red flex items-center justify-center text-[10px] font-bold text-primary-foreground">
+                        <div className="w-9 h-9 rounded-full gradient-red flex items-center justify-center text-[10px] font-bold text-primary-foreground shrink-0">
                           {friend.initials}
                         </div>
                       )}
-                      <span className="flex-1 text-sm text-foreground font-medium">{friend.display_name}</span>
+                      <span className="flex-1 text-sm text-foreground font-medium truncate">{friend.display_name}</span>
                       <button
                         onClick={() => sendToFriend(friend)}
                         disabled={friend.sent}
-                        className={`px-4 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        className={`px-4 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 ${
                           friend.sent
                             ? "bg-secondary text-muted-foreground"
                             : "gradient-red text-primary-foreground shadow-red"

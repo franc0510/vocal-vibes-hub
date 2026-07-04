@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { Capacitor } from "@capacitor/core";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -17,18 +18,50 @@ import { useAuth } from "@/contexts/AuthContext";
  */
 export const useRealtimeNotifications = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Make sure we have permission to display notifications
   useEffect(() => {
     const ask = async () => {
       if (Capacitor.isNativePlatform()) {
-        await LocalNotifications.requestPermissions();
+        try {
+          const { display } = await LocalNotifications.checkPermissions();
+          if (display !== "granted") {
+            await LocalNotifications.requestPermissions();
+          }
+        } catch {
+          /* ignore */
+        }
       } else if ("Notification" in window && Notification.permission === "default") {
         try { await Notification.requestPermission(); } catch {}
       }
     };
     ask();
   }, []);
+
+  // Listen for taps on local notifications to deep-link into the right screen
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let removeHandle: { remove: () => Promise<void> } | null = null;
+
+    (async () => {
+      removeHandle = await LocalNotifications.addListener(
+        "localNotificationActionPerformed",
+        (action) => {
+          const extra = action?.notification?.extra as { postId?: string; actorId?: string } | undefined;
+          if (extra?.postId) {
+            navigate(`/post/${extra.postId}`);
+          } else if (extra?.actorId) {
+            navigate(`/user/${extra.actorId}`);
+          }
+        }
+      );
+    })();
+
+    return () => {
+      removeHandle?.remove();
+    };
+  }, [navigate]);
 
   useEffect(() => {
     if (!user) return;
@@ -54,7 +87,9 @@ export const useRealtimeNotifications = () => {
 
           // Weekly winner is a self-notification — celebratory, no actor name
           if (notif.type === "weekly_winner") {
-            await fire("VocMe of the Week 🏆", "👑 Congrats! Your VocMe was crowned VocMe of the Week!");
+            await fire("VocMe of the Week 🏆", "👑 Congrats! Your VocMe was crowned VocMe of the Week!", {
+              postId: notif.post_id,
+            });
             return;
           }
 
@@ -80,10 +115,13 @@ export const useRealtimeNotifications = () => {
           if (notif.type === "friend_post" && notif.post_id) {
             const { data: postData } = await supabase
               .from("voice_posts").select("title").eq("id", notif.post_id).single();
-            pushBody = `${actorName} added a new VocMe "${postData?.title || ""}"`;
+            pushBody = `${actorName} added a new VocMe${postData?.title ? `: "${postData.title}"` : ""}`;
           }
 
-          await fire("VocMe", pushBody);
+          await fire("VocMe", pushBody, {
+            postId: notif.post_id || undefined,
+            actorId: notif.actor_id || undefined,
+          });
         }
       )
       .subscribe();
@@ -92,7 +130,11 @@ export const useRealtimeNotifications = () => {
   }, [user?.id]);
 };
 
-async function fire(title: string, body: string) {
+async function fire(
+  title: string,
+  body: string,
+  extra?: { postId?: string; actorId?: string }
+) {
   if (Capacitor.isNativePlatform()) {
     try {
       await LocalNotifications.schedule({
@@ -101,6 +143,7 @@ async function fire(title: string, body: string) {
           title,
           body,
           sound: "default",
+          extra: extra ?? {},
         }],
       });
     } catch {

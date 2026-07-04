@@ -1,0 +1,23 @@
+{
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/checkouts/swift-algorithms/Sources/Algorithms/EitherSequence.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/EitherSequence.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/EitherSequence.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/EitherSequence.dia",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/EitherSequence.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/EitherSequence.swiftdeps"
+  },
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/checkouts/swift-algorithms/Sources/Algorithms/FirstNonNil.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FirstNonNil.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FirstNonNil.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FirstNonNil.dia",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FirstNonNil.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FirstNonNil.swiftdeps"
+  },
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/checkouts/swift-algorithms/Sources/Algorithms/FlattenCollection.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FlattenCollection.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FlattenCollection.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FlattenCollection.dia",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FlattenCollection.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/swift-algorithms.build/Debug-iphonesimulator/Algorithms.build/Objects-normal/arm64/FlattenCollection.swiftdeps"
+  }
+}

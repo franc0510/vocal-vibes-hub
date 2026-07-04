@@ -1,0 +1,176 @@
+{
+  "object" : {
+    "artifacts" : [
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "capacitor-swift-pm",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/ionic-team/capacitor-swift-pm.git",
+          "name" : "capacitor-swift-pm"
+        },
+        "path" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/artifacts/capacitor-swift-pm/Capacitor/Capacitor.xcframework",
+        "source" : {
+          "checksum" : "52f15c772da02248cdd159f396b31455dfe3acf36c14b37c68e3c24032131963",
+          "type" : "remote",
+          "url" : "https://github.com/ionic-team/capacitor-swift-pm/releases/download/8.2.0/Capacitor.xcframework.zip"
+        },
+        "targetName" : "Capacitor"
+      },
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "capacitor-swift-pm",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/ionic-team/capacitor-swift-pm.git",
+          "name" : "capacitor-swift-pm"
+        },
+        "path" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/SourcePackages/artifacts/capacitor-swift-pm/Cordova/Cordova.xcframework",
+        "source" : {
+          "checksum" : "f552659b3803e7fa1790316b5dcf79ec165005d51be6a17a05b7f1dc0f8b8a44",
+          "type" : "remote",
+          "url" : "https://github.com/ionic-team/capacitor-swift-pm/releases/download/8.2.0/Cordova.xcframework.zip"
+        },
+        "targetName" : "Cordova"
+      }
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "capacitor-swift-pm",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/ionic-team/capacitor-swift-pm.git",
+          "name" : "capacitor-swift-pm"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "0e862e6ff13852a710c8a484180ca4d6a2cc9761",
+            "version" : "8.2.0"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "capacitor-swift-pm"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "capapp-spm",
+          "kind" : "fileSystem",
+          "location" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/App/CapApp-SPM",
+          "name" : "CapApp-SPM"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/App/CapApp-SPM"
+        },
+        "subpath" : "capapp-spm"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "device",
+          "kind" : "fileSystem",
+          "location" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/node_modules/@capacitor/device",
+          "name" : "CapacitorDevice"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/node_modules/@capacitor/device"
+        },
+        "subpath" : "device"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "local-notifications",
+          "kind" : "fileSystem",
+          "location" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/node_modules/@capacitor/local-notifications",
+          "name" : "CapacitorLocalNotifications"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/node_modules/@capacitor/local-notifications"
+        },
+        "subpath" : "local-notifications"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "media",
+          "kind" : "fileSystem",
+          "location" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/node_modules/@capacitor-community/media",
+          "name" : "CapacitorCommunityMedia"
+        },
+        "state" : {
+          "name" : "fileSystem",
+          "path" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/node_modules/@capacitor-community/media"
+        },
+        "subpath" : "media"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "sdwebimage",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/SDWebImage/SDWebImage.git",
+          "name" : "SDWebImage"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "2de3a496eaf6df9a1312862adcfd54acd73c39c0",
+            "version" : "5.21.7"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "SDWebImage"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-algorithms",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-algorithms.git",
+          "name" : "swift-algorithms"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "87e50f483c54e6efd60e885f7f5aa946cee68023",
+            "version" : "1.2.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-algorithms"
+      },
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swift-numerics",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/apple/swift-numerics.git",
+          "name" : "swift-numerics"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
+            "version" : "1.1.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "swift-numerics"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

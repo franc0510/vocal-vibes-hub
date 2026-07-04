@@ -1,0 +1,4 @@
+module DevicePlugin {
+header "DevicePlugin-Swift.h"
+export *
+}

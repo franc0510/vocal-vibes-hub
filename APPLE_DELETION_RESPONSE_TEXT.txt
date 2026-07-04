@@ -1,0 +1,81 @@
+## Response to Apple Guideline 5.1.1(v) - Account Deletion
+
+Dear Apple Review Team,
+
+Thank you for the feedback. We have fully implemented account deletion functionality that meets Guideline 5.1.1(v) requirements.
+
+### Implementation Summary
+
+**Account Deletion Feature:**
+- Complete account deletion option available in Settings
+- Accessible from: Profile → Settings → "Delete My Account" (red button)
+- No external website or support contact required
+- One-tap confirmation process within the app
+
+### How It Works
+
+1. **User Initiates:** Tap "Delete My Account" in Settings
+2. **Confirmation Modal:** Shows permanent warning with list of data being deleted:
+   - Profile and avatar
+   - All voice posts and content
+   - All messages and comments
+   - States "This action is permanent"
+3. **Confirmation Button:** User taps "Yes, Delete Everything"
+4. **Immediate Deletion:** All account data deleted instantly:
+   - Profile record
+   - All voice posts
+   - All comments, likes, messages
+   - All follow relationships and blocks
+   - Auth account deleted
+5. **User Logged Out:** Automatically redirected to login screen
+
+### Data Deleted
+
+**Immediately removed:**
+- User profile (display_name, username, bio, avatar_url)
+- All voice posts and recordings
+- All comments and replies
+- All likes
+- All messages and conversations
+- All notifications
+- All group memberships
+- All follow relationships
+- Blocks and reports created by user
+
+**Cascading deletion via database constraints:**
+- All metadata associated with user account
+- Complete removal of personally identifiable information
+
+### Compliance
+
+✅ Full account deletion (not deactivation)
+✅ No external website or phone call required
+✅ No 30-day waiting period
+✅ Permanent deletion within seconds
+✅ Clear confirmation process
+✅ No recovery option
+✅ All personal data removed
+
+### Demo Recording
+
+The account deletion flow can be demonstrated by:
+1. Navigating to Profile tab
+2. Opening Settings
+3. Scrolling to "Delete My Account" button
+4. Showing confirmation modal
+5. Completing deletion
+6. Showing login screen after automatic logout
+
+Duration: ~30 seconds
+
+### Build Information
+
+- **Version Reviewed:** 1.0 (13)
+- **Date Updated:** July 4, 2026
+- **Tested on:** Physical iOS device
+- **Status:** Production-ready
+
+We believe this implementation fully addresses the account deletion requirement. The feature is live and ready for Apple to review.
+
+Thank you,
+VocMe Development Team

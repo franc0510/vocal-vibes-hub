@@ -7,16 +7,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Match the app background color (#fafafa) so safe areas blend with the BottomNav
+        // Match the app background color (#fafafa) so safe areas blend with the BottomNav.
+        // We tint the window & root view — Capacitor manages its own rootViewController.
         let bgColor = UIColor(red: 250/255, green: 250/255, blue: 250/255, alpha: 1.0)
-
-        if let window = self.window {
-            window.backgroundColor = bgColor
-            if let rootVC = window.rootViewController {
-                rootVC.view.backgroundColor = bgColor
-            }
-        }
-
+        window?.backgroundColor = bgColor
+        window?.rootViewController?.view.backgroundColor = bgColor
         return true
     }
 

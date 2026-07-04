@@ -52,14 +52,18 @@ export const useVoicePosts = () => {
   // Hydrate instantly from cache so the first reals appear immediately
   const [posts, setPosts] = useState<VoicePostWithAuthor[]>(() => readCache());
   const [loading, setLoading] = useState(() => readCache().length === 0);
+  const [allFetched, setAllFetched] = useState(false);
   const shuffledOrderRef = useRef<string[]>([]);
+  // Keep the full ordered list internally; only expose chunks progressively
+  const fullListRef = useRef<VoicePostWithAuthor[]>([]);
+  const PAGE_SIZE = 5;
 
   const fetchPosts = async () => {
     setLoading(true);
 
     const { data: postsData, error } = await supabase
       .from("voice_posts")
-      .select("*")
+      .select("*, transcription, image_url, location")
       .order("created_at", { ascending: false });
 
     if (error || !postsData) {
@@ -71,8 +75,17 @@ export const useVoicePosts = () => {
     const userIds = [...new Set(postsData.map((p) => p.user_id))];
     const postIds = postsData.map((p) => p.id);
 
-    // Run all the dependent lookups in PARALLEL (huge speed-up vs. the old
-    // per-post sequential count queries which made the first reals very slow).
+    // Fetch blocked users to filter them out
+    let blockedUserIds = new Set<string>();
+    if (user) {
+      const { data: blockedUsers } = await (supabase as any)
+        .from("blocks")
+        .select("blocked_user_id")
+        .eq("user_id", user.id);
+      blockedUserIds = new Set((blockedUsers || []).map((b: any) => b.blocked_user_id));
+    }
+
+    // Run all the dependent lookups in PARALLEL
     const [
       { data: profiles },
       { data: allLikes },
@@ -107,6 +120,9 @@ export const useVoicePosts = () => {
 
     const enrichedMap = new Map<string, VoicePostWithAuthor>();
     for (const p of postsData) {
+      // Skip blocked users' posts
+      if (blockedUserIds.has(p.user_id)) continue;
+
       const profile = profileMap.get(p.user_id);
       const initials = (profile?.display_name || "U")
         .split(" ")
@@ -119,9 +135,9 @@ export const useVoicePosts = () => {
         ...p,
         likes_count: likeCountMap.get(p.id) ?? p.likes_count ?? 0,
         comments_count: commentCountMap.get(p.id) ?? p.comments_count ?? 0,
-        transcription: (p as any).transcription || null,
-        image_url: (p as any).image_url || null,
-        location: (p as any).location || null,
+        transcription: p.transcription || (p as any).transcription || null,
+        image_url: p.image_url || (p as any).image_url || null,
+        location: p.location || (p as any).location || null,
         author: {
           name: profile?.display_name || "User",
           username: profile?.username ? `@${profile.username}` : "@user",
@@ -173,9 +189,26 @@ export const useVoicePosts = () => {
     // Bucketize each group separately, unlistened first
     const ordered = [...bucketize(unlistened), ...bucketize(listened)];
 
-    setPosts(ordered);
+    fullListRef.current = ordered;
+    // Expose only the first PAGE_SIZE initially (instant render)
+    setPosts(ordered.slice(0, PAGE_SIZE));
     writeCache(ordered);
+    setAllFetched(false);
     setLoading(false);
+  };
+
+  /** Load the next chunk of 5 posts into the visible list (called by RealsViewer when nearing the end). */
+  const loadMore = () => {
+    const full = fullListRef.current;
+    if (full.length === 0) return;
+    setPosts((prev) => {
+      if (prev.length >= full.length) {
+        setAllFetched(true);
+        return prev;
+      }
+      const next = full.slice(0, prev.length + PAGE_SIZE);
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -197,5 +230,5 @@ export const useVoicePosts = () => {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
-  return { posts, loading, refetch: fetchPosts };
+  return { posts, loading, refetch: fetchPosts, loadMore, allFetched };
 };

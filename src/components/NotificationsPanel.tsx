@@ -143,6 +143,12 @@ const NotificationsPanel = ({ open, onClose }: NotificationsPanelProps) => {
   useEffect(() => {
     if (open && user) {
       fetchNotifications();
+      // Auto-mark all as read shortly after opening so the bell badge
+      // clears (the user has now "seen" the list).
+      const t = setTimeout(() => {
+        markAllRead();
+      }, 800);
+      return () => clearTimeout(t);
     }
   }, [open, user?.id]);
 
@@ -236,9 +242,11 @@ const NotificationsPanel = ({ open, onClose }: NotificationsPanelProps) => {
                         onClick={() => {
                           onClose();
                           if (isWeeklyWin) { navigate("/weekly"); return; }
-                          // Always navigate to the user profile; if there's a post, pass it as query param
-                          if (notif.post_id) {
-                            navigate(`/user/${notif.actor_id}?postId=${notif.post_id}`);
+                          // For post-related notifications (like, comment, share,
+                          // friend_post, group_post) → open the post directly.
+                          // For follow / group_added → open the actor's profile.
+                          if (notif.post_id && (notif.type === "like" || notif.type === "comment" || notif.type === "share" || notif.type === "friend_post" || notif.type === "group_post")) {
+                            navigate(`/post/${notif.post_id}`);
                           } else {
                             navigate(`/user/${notif.actor_id}`);
                           }

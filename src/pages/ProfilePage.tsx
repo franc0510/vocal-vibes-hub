@@ -1,10 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, LogOut, Camera, Loader2, X, Play } from "lucide-react";
 import VoiceCard from "@/components/VoiceCard";
 import { useAuth } from "@/contexts/AuthContext";
-import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
+import { type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
 import { useFollows } from "@/hooks/useFollows";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -13,13 +13,60 @@ import FollowListModal from "@/components/FollowListModal";
 const ProfilePage = () => {
   const { user, profile, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
-  const { posts } = useVoicePosts();
-  const userPosts = posts.filter((p) => p.user_id === user?.id);
+  const [userPosts, setUserPosts] = useState<VoicePostWithAuthor[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedPost, setSelectedPost] = useState<VoicePostWithAuthor | null>(null);
   const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
   const { followersCount, followingCount } = useFollows(user?.id);
+
+  // Fetch ALL of the current user's posts directly (independent of the paginated feed)
+  useEffect(() => {
+    if (!user) return;
+    const fetchOwnPosts = async () => {
+      const { data: rawPosts } = await supabase
+        .from("voice_posts")
+        .select("*, transcription, image_url, location")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (!rawPosts) return;
+
+      const postIds = rawPosts.map((p) => p.id);
+      const [{ data: allLikes }, { data: allComments }, { data: myLikes }] = await Promise.all([
+        supabase.from("voice_post_likes").select("post_id").in("post_id", postIds),
+        supabase.from("comments").select("post_id").in("post_id", postIds),
+        supabase.from("voice_post_likes").select("post_id").eq("user_id", user.id),
+      ]);
+
+      const likeMap = new Map<string, number>();
+      for (const l of allLikes || []) likeMap.set(l.post_id, (likeMap.get(l.post_id) || 0) + 1);
+      const commentMap = new Map<string, number>();
+      for (const c of allComments || []) commentMap.set(c.post_id, (commentMap.get(c.post_id) || 0) + 1);
+      const likedSet = new Set((myLikes || []).map((l) => l.post_id));
+
+      const initials = (profile?.display_name || "U").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+
+      const enriched: VoicePostWithAuthor[] = rawPosts.map((p) => ({
+        ...p,
+        likes_count: likeMap.get(p.id) ?? p.likes_count ?? 0,
+        comments_count: commentMap.get(p.id) ?? p.comments_count ?? 0,
+        transcription: p.transcription || null,
+        image_url: p.image_url || null,
+        location: p.location || null,
+        author: {
+          name: profile?.display_name || "Me",
+          username: profile?.username ? `@${profile.username}` : "@me",
+          avatar: initials,
+          avatarUrl: profile?.avatar_url || undefined,
+        },
+        isLiked: likedSet.has(p.id),
+      }));
+
+      setUserPosts(enriched);
+    };
+    fetchOwnPosts();
+  }, [user?.id, profile?.display_name, profile?.avatar_url, profile?.username]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

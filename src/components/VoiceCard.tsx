@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Heart, MessageCircle, Share2, Play, Pause, Gauge, MapPin } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, Pause, Gauge, MapPin, MoreVertical } from "lucide-react";
 import WaveformVisualizer from "./WaveformVisualizer";
+import FlagReportModal from "./FlagReportModal";
 import { type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,6 +44,7 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likes_count);
   const [speed, setSpeed] = useState(1);
+  const [flagModalOpen, setFlagModalOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const waveform = useRef(generateWaveform(32)).current;
 
@@ -179,7 +181,21 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
           <Share2 size={18} />
           <span>{formatCount(post.shares_count)}</span>
         </button>
+        <button
+          onClick={() => setFlagModalOpen(true)}
+          className="ml-auto flex items-center justify-center w-8 h-8 rounded-full hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+        >
+          <MoreVertical size={18} />
+        </button>
       </div>
+
+      <FlagReportModal
+        open={flagModalOpen}
+        onClose={() => setFlagModalOpen(false)}
+        postId={post.id}
+        authorId={post.user_id}
+        authorName={post.author?.name || "User"}
+      />
       </div>
     </motion.div>
   );

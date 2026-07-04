@@ -304,7 +304,7 @@ const MessagesPage = () => {
                 {(msg as any).voice_url ? (
                   <VoiceMessageBubble url={(msg as any).voice_url} isMe={isMe} />
                 ) : msg.content ? (
-                  <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm ${isMe ? "gradient-coral text-primary-foreground rounded-br-md" : "bg-secondary text-foreground rounded-bl-md"}`}>
+                  <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm break-words ${isMe ? "gradient-coral text-primary-foreground rounded-br-md" : "bg-secondary text-foreground rounded-bl-md"}`}>
                     {msg.content}
                   </div>
                 ) : null}

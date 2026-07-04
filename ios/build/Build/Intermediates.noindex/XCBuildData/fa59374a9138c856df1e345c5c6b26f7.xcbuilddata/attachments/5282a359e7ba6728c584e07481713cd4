@@ -1,0 +1,4 @@
+module MediaPlugin {
+header "MediaPlugin-Swift.h"
+export *
+}

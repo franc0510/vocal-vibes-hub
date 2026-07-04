@@ -1,0 +1,19 @@
+{
+  "" : {
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin-primary.dia",
+    "emit-module-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin-primary-emit-module.dia",
+    "pch" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin-primary.swiftdeps"
+  },
+  "/Users/mac-FGILLO05/vocal-vibes-hub-1/node_modules/@capacitor-community/media/ios/Sources/MediaPlugin/MediaPlugin.swift" : {
+    "const-values" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin.swiftconstvalues",
+    "dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin.d",
+    "diagnostics" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin.dia",
+    "index-unit-output-path" : "/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin.o",
+    "llvm-bc" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin.bc",
+    "object" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin.o",
+    "swift-dependencies" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin.swiftdeps",
+    "swiftmodule" : "/Users/mac-FGILLO05/vocal-vibes-hub-1/ios/build/Build/Intermediates.noindex/CapacitorCommunityMedia.build/Debug-iphonesimulator/MediaPlugin.build/Objects-normal/arm64/MediaPlugin~partial.swiftmodule"
+  }
+}
