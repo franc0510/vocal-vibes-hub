@@ -52,20 +52,37 @@ const AppRoutes = () => {
     if (!Capacitor.isNativePlatform()) return;
 
     const handleAppUrlOpen = async ({ url }: { url: string }) => {
+      console.log("🔗 App URL opened:", url);
+      
       // Close the in-app browser
       try { await Browser.close(); } catch {}
 
-      // Extract tokens from the URL hash/query
-      if (url.includes("access_token") || url.includes("refresh_token") || url.includes("#")) {
-        // Parse fragment from the deep link URL
-        const hashIndex = url.indexOf("#");
-        if (hashIndex >= 0) {
-          const fragment = url.substring(hashIndex + 1);
-          const params = new URLSearchParams(fragment);
-          const accessToken = params.get("access_token");
-          const refreshToken = params.get("refresh_token");
-          if (accessToken && refreshToken) {
-            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      // Extract tokens from the URL hash
+      const hashIndex = url.indexOf("#");
+      if (hashIndex >= 0) {
+        const fragment = url.substring(hashIndex + 1);
+        const params = new URLSearchParams(fragment);
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+        
+        console.log("🔑 Tokens found:", !!accessToken, !!refreshToken);
+        
+        if (accessToken && refreshToken) {
+          try {
+            const { data, error } = await supabase.auth.setSession({ 
+              access_token: accessToken, 
+              refresh_token: refreshToken 
+            });
+            
+            if (error) {
+              console.error("❌ Session error:", error);
+            } else {
+              console.log("✅ Session set successfully:", data.user?.id);
+              // Force a page reload to update the auth state
+              window.location.href = "/";
+            }
+          } catch (err) {
+            console.error("❌ Failed to set session:", err);
           }
         }
       }

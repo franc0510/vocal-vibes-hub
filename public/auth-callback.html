@@ -46,19 +46,41 @@
   <div class="spinner"></div>
   <h1>Signing you in...</h1>
   <p>Redirecting to VocMe app</p>
-  <a class="btn" href="vocme://auth/callback" id="openApp" style="display:none;">Open VocMe</a>
+  <a class="btn" id="openApp" style="display:none;">Open VocMe</a>
 
   <script>
-    // Try to redirect to the app immediately
+    // Get tokens from URL hash (Supabase puts them there after OAuth)
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const expiresIn = params.get('expires_in');
+    const tokenType = params.get('token_type');
+    
+    let deeplink = 'vocme://auth/callback';
+    
+    // If we have tokens, include them in the deeplink
+    if (accessToken && refreshToken) {
+      deeplink = `vocme://auth/callback#access_token=${accessToken}&refresh_token=${refreshToken}&expires_in=${expiresIn || '3600'}&token_type=${tokenType || 'bearer'}`;
+      console.log('Tokens found, redirecting with tokens');
+    } else {
+      console.log('No tokens in URL, redirecting without tokens');
+    }
+    
+    // Set up the button with the deeplink
+    document.getElementById('openApp').href = deeplink;
+    
+    // Try to redirect immediately
     setTimeout(() => {
-      // Try deeplink
-      window.location.href = "vocme://auth/callback";
+      window.location.href = deeplink;
       
       // Show button as fallback after 2 seconds
       setTimeout(() => {
         document.getElementById('openApp').style.display = 'block';
+        document.querySelector('p').textContent = 'Tap the button to continue';
       }, 2000);
-    }, 500);
+    }, 300);
   </script>
 </body>
 </html>
