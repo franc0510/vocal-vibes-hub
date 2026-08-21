@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Heart, MessageCircle, Share2, Play, Pause, Gauge, MapPin, SkipBack, SkipForward } from "lucide-react";
+import { ArrowLeft, Heart, MessageCircle, Share2, Play, Pause, Gauge, MapPin, SkipBack, SkipForward, Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -10,6 +10,8 @@ import WaveformVisualizer from "@/components/WaveformVisualizer";
 import CommentsPanel from "@/components/CommentsPanel";
 import SharePanel from "@/components/SharePanel";
 import LikesListModal from "@/components/LikesListModal";
+import StorySlideshow from "@/components/StorySlideshow";
+import { useIllustrations } from "@/hooks/useIllustrations";
 
 const generateWaveform = () => Array.from({ length: 32 }, () => 0.15 + Math.random() * 0.85);
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
@@ -46,6 +48,11 @@ const PostPage = () => {
   const seekBarRef = useRef<HTMLDivElement | null>(null);
   const isSeekingRef = useRef(false);
   const waveform = useRef(generateWaveform()).current;
+
+  const { panels, status: illustrationStatus, requesting, illustrate } = useIllustrations(
+    postId,
+    post?.illustration_status
+  );
 
   useEffect(() => {
     if (!postId) return;
@@ -251,17 +258,40 @@ const PostPage = () => {
     .toUpperCase();
   const backgroundUrl = post.image_url || author?.avatar_url;
 
+  const isOwner = user?.id === post.user_id;
+  const hasSlideshow = panels.length > 0;
+  const currentMs = progress * (post.duration || 0) * 1000;
+
+  const handleIllustrate = async () => {
+    try {
+      await illustrate();
+      toast.success("On dessine ton anecdote… ça prend une minute ✨");
+    } catch (err: any) {
+      toast.error(err?.message || "Impossible d'illustrer cette anecdote");
+    }
+  };
+
   return (
     <div
       className="w-full h-full relative overflow-y-auto overflow-x-hidden"
       style={{ touchAction: "pan-y", paddingBottom: "env(safe-area-inset-bottom, 56px)" }}
     >
-      {backgroundUrl && (
+      {hasSlideshow ? (
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          <StorySlideshow
+            panels={panels}
+            currentMs={currentMs}
+            overlay={
+              <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background/95" />
+            }
+          />
+        </div>
+      ) : backgroundUrl ? (
         <div className="fixed inset-0 z-0 pointer-events-none">
           <img src={backgroundUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background/95" />
         </div>
-      )}
+      ) : null}
 
       <div
         className="relative z-10 px-4 pb-6"
@@ -389,6 +419,32 @@ const PostPage = () => {
             <p className="text-xs text-foreground/80 leading-relaxed italic">
               "{post.transcription}"
             </p>
+          </div>
+        )}
+
+        {isOwner && post.transcription && !hasSlideshow && (
+          <div className="mb-4">
+            {illustrationStatus === "pending" ? (
+              <div className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-card/50 backdrop-blur-sm border border-border/20">
+                <Loader2 size={15} className="text-primary animate-spin" />
+                <span className="text-xs text-muted-foreground font-medium">
+                  On dessine ton anecdote…
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={handleIllustrate}
+                disabled={requesting}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-card/70 backdrop-blur-md border border-border/30 text-foreground font-medium text-sm disabled:opacity-60 transition-opacity"
+              >
+                {requesting ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <Sparkles size={15} className="text-primary" />
+                )}
+                {illustrationStatus === "failed" ? "Réessayer d'illustrer" : "Illustrer mon anecdote"}
+              </button>
+            )}
           </div>
         )}
 

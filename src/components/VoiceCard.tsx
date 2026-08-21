@@ -110,10 +110,10 @@ const VoiceCard = ({ post, index }: VoiceCardProps) => {
       transition={{ duration: 0.4, delay: index * 0.08 }}
       className="relative bg-card rounded-2xl p-4 shadow-card hover:shadow-elevated transition-shadow duration-200 border border-border/50 overflow-hidden"
     >
-      {/* Optional photo background */}
-      {post.image_url && (
+      {/* Optional photo background, or the first generated panel */}
+      {(post.image_url || post.illustration_cover_url) && (
         <div className="absolute inset-0 z-0">
-          <img src={post.image_url} alt="" className="w-full h-full object-cover" />
+          <img src={post.image_url || post.illustration_cover_url!} alt="" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-b from-card/80 via-card/85 to-card/95" />
         </div>
       )}

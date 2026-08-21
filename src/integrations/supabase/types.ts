@@ -232,6 +232,62 @@ export type Database = {
           },
         ]
       }
+      post_illustrations: {
+        Row: {
+          caption: string | null
+          cost_usd: number | null
+          created_at: string
+          end_ms: number
+          id: string
+          idx: number
+          image_url: string
+          model: string | null
+          post_id: string
+          prompt: string | null
+          provider: string | null
+          start_ms: number
+          style_id: string
+        }
+        Insert: {
+          caption?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          end_ms?: number
+          id?: string
+          idx: number
+          image_url: string
+          model?: string | null
+          post_id: string
+          prompt?: string | null
+          provider?: string | null
+          start_ms?: number
+          style_id?: string
+        }
+        Update: {
+          caption?: string | null
+          cost_usd?: number | null
+          created_at?: string
+          end_ms?: number
+          id?: string
+          idx?: number
+          image_url?: string
+          model?: string | null
+          post_id?: string
+          prompt?: string | null
+          provider?: string | null
+          start_ms?: number
+          style_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_illustrations_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "voice_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       voice_post_likes: {
         Row: {
           created_at: string
@@ -268,12 +324,15 @@ export type Database = {
           created_at: string
           duration: number
           id: string
+          illustration_cover_url: string | null
+          illustration_status: string
           image_url: string | null
           likes_count: number
           location: string | null
           shares_count: number
           title: string
           transcription: string | null
+          transcription_segments: Json | null
           user_id: string
           visibility: string
         }
@@ -283,12 +342,15 @@ export type Database = {
           created_at?: string
           duration?: number
           id?: string
+          illustration_cover_url?: string | null
+          illustration_status?: string
           image_url?: string | null
           likes_count?: number
           location?: string | null
           shares_count?: number
           title: string
           transcription?: string | null
+          transcription_segments?: Json | null
           user_id: string
           visibility?: string
         }
@@ -298,12 +360,15 @@ export type Database = {
           created_at?: string
           duration?: number
           id?: string
+          illustration_cover_url?: string | null
+          illustration_status?: string
           image_url?: string | null
           likes_count?: number
           location?: string | null
           shares_count?: number
           title?: string
           transcription?: string | null
+          transcription_segments?: Json | null
           user_id?: string
           visibility?: string
         }

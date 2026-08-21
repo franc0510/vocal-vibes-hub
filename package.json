@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench:illustration": "npx tsx scripts/bench-illustration.ts",
     "ios:build": "vite build && npx cap sync ios && npx cap open ios",
     "ios:sync": "npx cap sync ios"
   },
