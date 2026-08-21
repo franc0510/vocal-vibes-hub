@@ -48,10 +48,10 @@ CREATE TABLE IF NOT EXISTS public.post_illustrations (
   UNIQUE (post_id, idx)
 );
 
-CREATE INDEX IF NOT EXISTS post_illustrations_post_id_idx
-  ON public.post_illustrations (post_id, idx);
+-- No index on (post_id, idx) here: the UNIQUE constraint above already
+-- provides one, and it serves the ordered read the slideshow does.
 
--- Daily quota lookups filter on the generating user + a time window.
+-- Daily quota lookups filter on a time window.
 CREATE INDEX IF NOT EXISTS post_illustrations_created_at_idx
   ON public.post_illustrations (created_at);
 
