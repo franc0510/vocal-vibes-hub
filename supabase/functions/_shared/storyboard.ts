@@ -153,53 +153,114 @@ export interface BuildStoryboardInput {
   panelCount?: number;
 }
 
+/** Produces the storyboard JSON from a system and a user message. */
+type LlmCompleter = (system: string, user: string) => Promise<string>;
+
+/** OpenAI, with a strict schema so the shape is guaranteed rather than hoped for. */
+function openaiCompleter(apiKey: string): LlmCompleter {
+  const model = Deno.env.get("STORYBOARD_MODEL") ?? "gpt-4.1-mini";
+  return async (system, user) => {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: { name: "storyboard", strict: true, schema: STORYBOARD_SCHEMA },
+        },
+      }),
+    });
+    if (!res.ok) throw new Error(`Storyboard model failed: ${await res.text()}`);
+    const json = await res.json();
+    const raw = json?.choices?.[0]?.message?.content;
+    if (!raw) throw new Error("Storyboard model returned no content");
+    return raw;
+  };
+}
+
+/**
+ * fal, so a project holding only FAL_KEY can still build storyboards.
+ *
+ * There is no schema enforcement here, so the shape is requested in the prompt
+ * and the fences a chat model likes to add are stripped on the way out.
+ */
+function falCompleter(apiKey: string): LlmCompleter {
+  const model = Deno.env.get("STORYBOARD_FAL_MODEL") ?? "anthropic/claude-3.5-sonnet";
+  return async (system, user) => {
+    const res = await fetch("https://fal.run/fal-ai/any-llm", {
+      method: "POST",
+      headers: { Authorization: `Key ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        system_prompt: `${system}\n\nReply with JSON only, matching exactly: {"cast": string, "scenes": [{"caption": string, "description": string}]}. No prose, no code fences.`,
+        prompt: user,
+      }),
+    });
+    if (!res.ok) throw new Error(`Storyboard model failed: ${await res.text()}`);
+    const json = await res.json();
+    const raw = json?.output ?? json?.response ?? json?.text;
+    if (typeof raw !== "string" || !raw.trim()) {
+      throw new Error("Storyboard model returned no content");
+    }
+    return raw;
+  };
+}
+
+/**
+ * Picks whichever provider this environment is configured for.
+ *
+ * OpenAI first because its schema enforcement is stricter, but fal alone is
+ * enough — illustration must not be blocked on holding two API keys.
+ */
+export function pickCompleter(): LlmCompleter {
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  if (openaiKey) return openaiCompleter(openaiKey);
+
+  const falKey = Deno.env.get("FAL_KEY");
+  if (falKey) return falCompleter(falKey);
+
+  throw new Error("Storyboards need either OPENAI_API_KEY or FAL_KEY.");
+}
+
+/** Chat models wrap JSON in fences even when told not to. */
+function parseStoryboardJson(raw: string): StoryboardModelOutput {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Last resort: pull the outermost object out of any surrounding prose.
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(cleaned.slice(start, end + 1));
+      } catch {
+        /* fall through */
+      }
+    }
+    throw new Error("Storyboard model returned malformed JSON");
+  }
+}
+
 /**
  * Asks the language model for the cast sheet and the panel descriptions, then
  * maps them onto the audio timeline.
- *
- * Uses the OpenAI key that already powers transcription, so illustration adds
- * no new secret to manage.
  */
 export async function buildStoryboard(input: BuildStoryboardInput): Promise<Storyboard> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
-
-  const model = Deno.env.get("STORYBOARD_MODEL") ?? "gpt-4.1-mini";
+  const complete = pickCompleter();
   const count = input.panelCount ?? planPanelCount(input.durationSec);
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: STORYBOARD_SYSTEM },
-        {
-          role: "user",
-          content: `Title: ${input.title}\nPanels to produce: ${count}\n\nTranscript:\n${input.transcription}`,
-        },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: { name: "storyboard", strict: true, schema: STORYBOARD_SCHEMA },
-      },
-    }),
-  });
+  const raw = await complete(
+    STORYBOARD_SYSTEM,
+    `Title: ${input.title}\nPanels to produce: ${count}\n\nTranscript:\n${input.transcription}`
+  );
 
-  if (!res.ok) {
-    throw new Error(`Storyboard model failed: ${await res.text()}`);
-  }
-
-  const json = await res.json();
-  const raw = json?.choices?.[0]?.message?.content;
-  if (!raw) throw new Error("Storyboard model returned no content");
-
-  let parsed: StoryboardModelOutput;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("Storyboard model returned malformed JSON");
-  }
+  const parsed = parseStoryboardJson(raw);
 
   const scenes = (parsed.scenes ?? []).filter((s) => s?.description?.trim());
   if (scenes.length === 0) throw new Error("Storyboard model returned no scenes");

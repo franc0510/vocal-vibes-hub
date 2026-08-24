@@ -45,6 +45,46 @@ interface Anecdote {
   title: string;
   duration: number;
   transcription: string;
+  audio_url?: string;
+}
+
+/**
+ * Transcribes an anecdote through fal, so the benchmark does not depend on the
+ * app's own transcription pipeline having run.
+ *
+ * Whisper costs a fraction of a cent per minute — irrelevant next to the image
+ * generations this run is about.
+ */
+async function transcribeViaFal(audioUrl: string): Promise<string> {
+  const apiKey = process.env.FAL_KEY;
+  if (!apiKey) throw new Error("FAL_KEY manquant : impossible de transcrire.");
+
+  const res = await fetch("https://fal.run/fal-ai/whisper", {
+    method: "POST",
+    headers: { Authorization: `Key ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ audio_url: audioUrl }),
+  });
+  if (!res.ok) throw new Error(`Transcription échouée : ${res.status} ${await res.text()}`);
+
+  const json = await res.json();
+  const text = (json?.text ?? "").trim();
+  if (!text) throw new Error("Transcription vide");
+  return text;
+}
+
+/**
+ * Fills in transcriptions that the app has not produced.
+ *
+ * Only called for the real run: an estimate must stay free, so it merely
+ * reports which anecdotes would be transcribed.
+ */
+async function fillMissingTranscriptions(anecdotes: Anecdote[]): Promise<void> {
+  for (const a of anecdotes) {
+    if (hasUsableTranscription(a) || !a.audio_url) continue;
+    process.stdout.write(`  transcription de « ${a.title} »… `);
+    a.transcription = await transcribeViaFal(a.audio_url);
+    console.log(`${a.transcription.length} caractères`);
+  }
 }
 
 interface Cell {
@@ -96,8 +136,11 @@ Options
   --out <dir>         Output directory (default ./bench-output).
 
 Environment
-  OPENAI_API_KEY      Required — builds the storyboards, and serves GPT Image.
-  FAL_KEY             Required for every fal-hosted candidate.
+  FAL_KEY             Enough on its own: serves 6 of the 7 image candidates,
+                      builds the storyboards, and transcribes anecdotes the
+                      app has not transcribed yet.
+  OPENAI_API_KEY      Optional. Preferred for storyboards when present (strict
+                      schema), and required only for the GPT Image candidate.
   GEMINI_API_KEY      Only if you add a Gemini candidate.
 
 Reading your anecdotes needs no extra secret: the connection is read from
@@ -183,6 +226,7 @@ const hasUsableTranscription = (a: Anecdote) =>
  */
 function unusableReason(a: Anecdote): string {
   const length = transcriptionLength(a);
+  if (!a.audio_url) return "ni transcription ni audio — rien à illustrer";
   if (length === 0) {
     return "aucune transcription — la transcription automatique n'a pas tourné, ou a échoué";
   }
@@ -200,14 +244,16 @@ async function loadByTitles(titles: string[]): Promise<Anecdote[]> {
     if (!needle) continue;
 
     const params = new URLSearchParams({
-      select: "title,duration,transcription",
+      select: "title,duration,transcription,audio_url",
       title: `ilike.*${needle}*`,
       order: "created_at.desc",
       limit: "5",
     });
 
     const rows = await queryPosts(params);
-    const usable = rows.find(hasUsableTranscription);
+    // A post with no transcription is still usable when its audio is there:
+    // the run transcribes it itself rather than waiting on the app's pipeline.
+    const usable = rows.find(hasUsableTranscription) ?? rows.find((r) => r.audio_url);
 
     if (usable) {
       found.push(usable);
@@ -248,14 +294,14 @@ async function loadByTitles(titles: string[]): Promise<Anecdote[]> {
  */
 async function loadRecent(limit: number): Promise<Anecdote[]> {
   const params = new URLSearchParams({
-    select: "title,duration,transcription",
-    transcription: "not.is.null",
+    select: "title,duration,transcription,audio_url",
     order: "created_at.desc",
     // Over-fetch, then keep only the substantial ones.
     limit: String(limit * 4),
   });
 
-  const usable = (await queryPosts(params)).filter(hasUsableTranscription);
+  // Audio alone is enough: anything missing a transcription gets one here.
+  const usable = (await queryPosts(params)).filter((a) => hasUsableTranscription(a) || a.audio_url);
   if (usable.length === 0) {
     throw new Error(
       "Aucune anecdote transcrite trouvée. Publie et laisse transcrire quelques posts,\n" +
@@ -363,7 +409,10 @@ async function main() {
       ? "ta base Supabase (les plus récentes)"
       : "anecdotes d'exemple (bench-fixtures.json)";
   console.log(`\nSource    : ${source}`);
-  anecdotes.forEach((a, i) => console.log(`            ${i + 1}. ${a.title} (${a.duration}s, ${panelsPer[i]} cases)`));
+  anecdotes.forEach((a, i) => {
+    const note = hasUsableTranscription(a) ? "" : " — sera transcrite au lancement";
+    console.log(`            ${i + 1}. ${a.title} (${a.duration}s, ${panelsPer[i]} cases)${note}`);
+  });
   console.log(`Anecdotes : ${anecdotes.length}`);
   console.log(`Modèles   : ${candidates.length} (${candidates.map((c) => c.label).join(", ")})`);
   console.log(`Images    : ${totalImages}`);
@@ -374,11 +423,22 @@ async function main() {
     return;
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    console.error("OPENAI_API_KEY manquant : il sert à construire les storyboards.");
+  // Either key can build a storyboard, so only the absence of both is fatal.
+  if (!process.env.OPENAI_API_KEY && !process.env.FAL_KEY) {
+    console.error(
+      "Ni OPENAI_API_KEY ni FAL_KEY : impossible de construire les storyboards.\n" +
+        "FAL_KEY seule suffit — elle sert aussi à la transcription et à 6 des 7 modèles."
+    );
     process.exitCode = 1;
     return;
   }
+  if (!process.env.OPENAI_API_KEY) {
+    console.log("ℹ️  Pas d'OPENAI_API_KEY : storyboards et transcriptions passent par fal.\n");
+  }
+
+  // Anything the app never transcribed gets transcribed here, so the benchmark
+  // is not blocked on the app's own pipeline.
+  await fillMissingTranscriptions(anecdotes);
 
   const imagesDir = join(args.out, "images");
   await mkdir(imagesDir, { recursive: true });

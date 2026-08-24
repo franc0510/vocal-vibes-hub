@@ -113,11 +113,11 @@ serve(async (req: Request) => {
         },
       }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("❌ Transcription error:", error);
     return new Response(
       JSON.stringify({
-        error: error.message || "Unknown error during transcription",
+        error: error instanceof Error ? error.message : "Unknown error during transcription",
       }),
       {
         status: 500,
