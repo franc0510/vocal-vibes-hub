@@ -9,8 +9,9 @@ name: Benchmark illustrations
 # lancer réellement la génération.
 #
 # Le résultat est téléchargeable en artefact : une planche contact HTML avec
-# UNE VIDÉO PAR MODÈLE — les planches défilent sur la voix de l'anecdote — plus
-# les images et un CSV de coûts.
+# UNE VIDÉO PAR MODÈLE — les planches défilent sur la voix de l'anecdote, avec
+# les mots réellement prononcés incrustés en cartouche — plus les images et un
+# CSV de coûts.
 #
 # Secrets à créer dans Settings → Secrets and variables → Actions :
 #   FAL_KEY         (le seul indispensable : images, storyboards, transcription)
@@ -76,7 +77,7 @@ jobs:
       # Échouer ici coûte 5 secondes ; échouer après npm ci et un appel réseau
       # en coûte 40, et le message se perd dans les logs.
       # FAL_KEY suffit à tout faire tourner : storyboards, transcriptions, et
-      # 6 des 7 modèles. OPENAI_API_KEY n'est qu'un bonus.
+      # tous les modèles sauf GPT Image. OPENAI_API_KEY n'est qu'un bonus.
       - name: Vérifier les secrets
         if: env.GENERATE == 'true'
         run: |
@@ -88,7 +89,7 @@ jobs:
           fi
           if [ -z "$OPENAI_API_KEY" ]; then
             echo "::notice::Pas d'OPENAI_API_KEY : storyboards et transcriptions passent par fal."
-            echo "Le candidat GPT Image sera le seul à échouer ; les 6 autres tournent normalement."
+            echo "GPT Image sera simplement ignoré ; les autres modèles tournent normalement."
           fi
 
       - uses: actions/checkout@v4
@@ -101,13 +102,15 @@ jobs:
       - run: npm ci
 
       # ffmpeg n'est PAS fourni par l'image ubuntu-latest — le premier run
-      # avec vidéos a échoué dessus, dix fois de suite.
-      - name: Installer ffmpeg
+      # avec vidéos a échoué dessus, dix fois de suite. La police est
+      # nécessaire au texte incrusté dans les cartouches.
+      - name: Installer ffmpeg et une police
         if: env.GENERATE == 'true'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
           ffmpeg -version | head -1
+          ls -1 /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
 
       # Les options sont assemblées une seule fois, en shell plutôt qu'en
       # expressions imbriquées : plus lisible, et les titres à espaces et

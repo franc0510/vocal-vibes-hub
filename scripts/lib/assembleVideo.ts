@@ -7,8 +7,10 @@
  */
 
 import { writeFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { drawtextFilters, FONT_CANDIDATES, type Caption } from "./captions.js";
 
 export interface VideoPanel {
   /** Absolute path to the panel image. */
@@ -46,7 +48,20 @@ export function buildConcatScript(panels: VideoPanel[]): string {
  * ends the video with the voice rather than on the last panel's nominal
  * duration, which drifts by a few frames.
  */
-export function ffmpegArgs(concatPath: string, audioPath: string, outPath: string): string[] {
+export function ffmpegArgs(
+  concatPath: string,
+  audioPath: string,
+  outPath: string,
+  captionFilters: string[] = []
+): string[] {
+  const video = [
+    "scale=1080:1920:force_original_aspect_ratio=increase",
+    "crop=1080:1920",
+    "fps=30",
+    "format=yuv420p",
+    ...captionFilters,
+  ].join(",");
+
   return [
     "-y",
     "-loglevel", "error",
@@ -56,7 +71,7 @@ export function ffmpegArgs(concatPath: string, audioPath: string, outPath: strin
     "-i", audioPath,
     "-map", "0:v",
     "-map", "1:a",
-    "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,format=yuv420p",
+    "-vf", video,
     "-c:v", "libx264",
     "-preset", "veryfast",
     "-crf", "23",
@@ -82,6 +97,19 @@ function run(cmd: string, args: string[]): Promise<void> {
   });
 }
 
+/** First installed font among the candidates, or undefined if none is. */
+export async function findFont(): Promise<string | undefined> {
+  for (const path of FONT_CANDIDATES) {
+    try {
+      await access(path);
+      return path;
+    } catch {
+      /* try the next */
+    }
+  }
+  return undefined;
+}
+
 export interface AssembleInput {
   panels: VideoPanel[];
   audioPath: string;
@@ -89,13 +117,30 @@ export interface AssembleInput {
   workDir: string;
   /** Distinguishes the concat scripts when several videos build in parallel. */
   tag: string;
+  /** Burned-in caption boxes. Omitted, the video carries no text. */
+  captions?: Caption[];
+  /** Path to a .ttf. Without one the captions are skipped, not faked. */
+  fontFile?: string;
 }
 
 /** Writes the concat script and runs ffmpeg. Returns the output path. */
 export async function assembleVideo(input: AssembleInput): Promise<string> {
   const concatPath = join(input.workDir, `concat-${input.tag}.txt`);
   await writeFile(concatPath, buildConcatScript(input.panels), "utf8");
-  await run("ffmpeg", ffmpegArgs(concatPath, input.audioPath, input.outPath));
+
+  let filters: string[] = [];
+  if (input.captions?.length && input.fontFile) {
+    const files = await Promise.all(
+      input.captions.map(async (caption, i) => {
+        const file = join(input.workDir, `cap-${input.tag}-${i}.txt`);
+        await writeFile(file, caption.text, "utf8");
+        return file;
+      })
+    );
+    filters = drawtextFilters(input.captions, files, { fontFile: input.fontFile });
+  }
+
+  await run("ffmpeg", ffmpegArgs(concatPath, input.audioPath, input.outPath, filters));
   return input.outPath;
 }
 
