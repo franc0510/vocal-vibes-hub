@@ -15,7 +15,7 @@
  */
 
 import { mkdir, writeFile, readFile } from "node:fs/promises";
-import { assembleVideo, type VideoPanel } from "./lib/assembleVideo.js";
+import { assembleVideo, hasFfmpeg, type VideoPanel } from "./lib/assembleVideo.js";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,16 +31,29 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const SHARED = join(ROOT, "supabase", "functions", "_shared");
 
-/** Every candidate, with the provider that serves it. */
+/**
+ * Every candidate, with the provider that serves it.
+ *
+ * These ids are the ones a real run has answered on. `fal-ai/flux-2/pro` was
+ * here and returned "Path /pro not found" — an id taken on trust rather than
+ * observed. Anything unproven belongs on the --models flag, not in a default
+ * that costs a column of red on everyone's contact sheet.
+ */
 const CANDIDATES: { provider: string; model: string; label: string }[] = [
   { provider: "fal", model: "fal-ai/flux/schnell", label: "FLUX.1 schnell" },
-  { provider: "fal", model: "fal-ai/flux-2/pro", label: "FLUX.2 pro" },
   { provider: "fal", model: "fal-ai/qwen-image", label: "Qwen-Image" },
   { provider: "fal", model: "fal-ai/bytedance/seedream/v4/text-to-image", label: "Seedream V4" },
   { provider: "fal", model: "fal-ai/ideogram/v3", label: "Ideogram 3.0" },
   { provider: "fal", model: "fal-ai/nano-banana", label: "Nano Banana" },
   { provider: "openai", model: "gpt-image-1", label: "GPT Image" },
 ];
+
+/** Which environment variable each provider needs to be worth attempting. */
+const PROVIDER_KEY: Record<string, string> = {
+  fal: "FAL_KEY",
+  openai: "OPENAI_API_KEY",
+  gemini: "GEMINI_API_KEY",
+};
 
 interface Anecdote {
   title: string;
@@ -139,12 +152,16 @@ Options
   --out <dir>         Output directory (default ./bench-output).
 
 Environment
-  FAL_KEY             Enough on its own: serves 6 of the 7 image candidates,
+  FAL_KEY             Enough on its own: serves 5 of the 6 image candidates,
                       builds the storyboards, and transcribes anecdotes the
                       app has not transcribed yet.
   OPENAI_API_KEY      Optional. Preferred for storyboards when present (strict
-                      schema), and required only for the GPT Image candidate.
+                      schema), and required only for the GPT Image candidate,
+                      which is skipped without it.
   GEMINI_API_KEY      Only if you add a Gemini candidate.
+
+Videos need ffmpeg on PATH. Without it the panels are still produced and the
+run says so up front; it is not installed by default on a GitHub runner.
 
 Reading your anecdotes needs no extra secret: the connection is read from
 .env (VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY), the same values
@@ -395,12 +412,26 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return usage();
 
-  const candidates = args.models
+  const requested = args.models
     ? CANDIDATES.filter((c) => args.models!.includes(c.model))
     : CANDIDATES;
 
+  // A candidate whose key is missing is not a failure to report per anecdote,
+  // it is a candidate that was never in the running.
+  const candidates = requested.filter((c) => {
+    const key = PROVIDER_KEY[c.provider];
+    if (!key || process.env[key]) return true;
+    console.log(`  (${c.label} ignoré : ${key} absent)`);
+    return false;
+  });
+
   if (candidates.length === 0) {
-    console.error("No candidate matched --models.");
+    console.error(
+      requested.length === 0
+        ? "Aucun modèle ne correspond à --models."
+        : "Aucun modèle utilisable : il manque la clé de chaque fournisseur demandé.\n" +
+            "FAL_KEY seule suffit pour la majorité des candidats."
+    );
     process.exitCode = 1;
     return;
   }
@@ -446,6 +477,13 @@ async function main() {
   }
   if (!process.env.OPENAI_API_KEY) {
     console.log("ℹ️  Pas d'OPENAI_API_KEY : storyboards et transcriptions passent par fal.\n");
+  }
+
+  if (!(await hasFfmpeg())) {
+    console.warn(
+      "⚠️  ffmpeg introuvable : les images seront produites, mais aucune vidéo.\n" +
+        "   Sur Debian/Ubuntu : sudo apt-get install -y ffmpeg\n"
+    );
   }
 
   // Anything the app never transcribed gets transcribed here, so the benchmark

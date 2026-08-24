@@ -100,6 +100,15 @@ jobs:
 
       - run: npm ci
 
+      # ffmpeg n'est PAS fourni par l'image ubuntu-latest — le premier run
+      # avec vidéos a échoué dessus, dix fois de suite.
+      - name: Installer ffmpeg
+        if: env.GENERATE == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -version | head -1
+
       # Les options sont assemblées une seule fois, en shell plutôt qu'en
       # expressions imbriquées : plus lisible, et les titres à espaces et
       # accents sont correctement cités.

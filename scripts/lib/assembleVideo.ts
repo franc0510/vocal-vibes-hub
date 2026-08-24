@@ -98,3 +98,13 @@ export async function assembleVideo(input: AssembleInput): Promise<string> {
   await run("ffmpeg", ffmpegArgs(concatPath, input.audioPath, input.outPath));
   return input.outPath;
 }
+
+/** Whether ffmpeg can actually be run, checked once before spending anything. */
+export async function hasFfmpeg(): Promise<boolean> {
+  try {
+    await run("ffmpeg", ["-version"]);
+    return true;
+  } catch {
+    return false;
+  }
+}
