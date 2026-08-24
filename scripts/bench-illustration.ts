@@ -16,7 +16,7 @@
 
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { assembleVideo, findFont, hasFfmpeg, type VideoPanel } from "./lib/assembleVideo.js";
-import { captionsFromSegments } from "./lib/captions.js";
+import { captionsFromSegments } from "../src/lib/captions.js";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -547,6 +547,17 @@ async function main() {
         panelCount: panelsPer[i],
       });
       console.log(`${storyboard.scenes.length} cases`);
+      // Persisted so a later import can place the panels in time without
+      // rebuilding — and without paying for the images a second time.
+      await writeFile(
+        join(args.out, `storyboard-${i}.json`),
+        JSON.stringify(
+          { title: anecdote.title, duration: anecdote.duration, segments: anecdote.segments ?? [], storyboard },
+          null,
+          2
+        ),
+        "utf8"
+      );
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       console.log(`échec : ${reason}`);

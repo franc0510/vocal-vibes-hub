@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { orderFeed } from "@/lib/feedOrder";
+import { parseSegments, type TimedSegment } from "@/lib/captions";
 
 export interface VoicePostWithAuthor {
   id: string;
@@ -18,6 +20,10 @@ export interface VoicePostWithAuthor {
   group_id?: string | null;
   illustration_status?: string | null;
   illustration_cover_url?: string | null;
+  video_url?: string | null;
+  video_status?: string | null;
+  duration_ms?: number | null;
+  transcription_segments?: TimedSegment[] | null;
   author: {
     name: string;
     username: string;
@@ -55,7 +61,6 @@ export const useVoicePosts = () => {
   const [posts, setPosts] = useState<VoicePostWithAuthor[]>(() => readCache());
   const [loading, setLoading] = useState(() => readCache().length === 0);
   const [allFetched, setAllFetched] = useState(false);
-  const shuffledOrderRef = useRef<string[]>([]);
   // Keep the full ordered list internally; only expose chunks progressively
   const fullListRef = useRef<VoicePostWithAuthor[]>([]);
   const PAGE_SIZE = 5;
@@ -140,6 +145,7 @@ export const useVoicePosts = () => {
         transcription: p.transcription || (p as any).transcription || null,
         image_url: p.image_url || (p as any).image_url || null,
         location: p.location || (p as any).location || null,
+        transcription_segments: parseSegments(p.transcription_segments),
         author: {
           name: profile?.display_name || "User",
           username: profile?.username ? `@${profile.username}` : "@user",
@@ -150,46 +156,10 @@ export const useVoicePosts = () => {
       });
     }
 
-    // Sort: unlistened first, then bucket by engagement score, randomize within each bucket
-    const allEntries = [...enrichedMap.values()];
-
-    // Shuffle helper
-    const shuffle = <T,>(arr: T[]): T[] => {
-      const a = [...arr];
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-      }
-      return a;
-    };
-
-    // Score = likes + comments (engagement)
-    const score = (p: VoicePostWithAuthor) => p.likes_count + p.comments_count;
-
-    // Bucket thresholds: [high(10+), medium(3-9), low(1-2), zero(0)]
-    const bucketize = (entries: VoicePostWithAuthor[]) => {
-      const high: VoicePostWithAuthor[] = [];
-      const medium: VoicePostWithAuthor[] = [];
-      const low: VoicePostWithAuthor[] = [];
-      const zero: VoicePostWithAuthor[] = [];
-
-      for (const e of entries) {
-        const s = score(e);
-        if (s >= 10) high.push(e);
-        else if (s >= 3) medium.push(e);
-        else if (s >= 1) low.push(e);
-        else zero.push(e);
-      }
-
-      return [...shuffle(high), ...shuffle(medium), ...shuffle(low), ...shuffle(zero)];
-    };
-
-    // Separate unlistened vs listened
-    const unlistened = allEntries.filter((p) => !listenedPostIds.has(p.id));
-    const listened = allEntries.filter((p) => listenedPostIds.has(p.id));
-
-    // Bucketize each group separately, unlistened first
-    const ordered = [...bucketize(unlistened), ...bucketize(listened)];
+    // Illustrated anecdotes lead the feed; inside each group the existing
+    // rules stand (unheard first, then engagement bands, shuffled within a
+    // band). See src/lib/feedOrder.ts.
+    const ordered = orderFeed([...enrichedMap.values()], listenedPostIds);
 
     fullListRef.current = ordered;
     // Expose only the first PAGE_SIZE initially (instant render)

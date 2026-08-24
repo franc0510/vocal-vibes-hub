@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Square, Send, Loader2, MicOff, AlertCircle, Settings, Image as ImageIcon, MapPin, Play, Pause, Trash2, X } from "lucide-react";
+import { Mic, Square, Send, Loader2, MicOff, AlertCircle, Settings, Image as ImageIcon, MapPin, Play, Pause, Trash2, X, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMicrophone } from "@/hooks/useMicrophone";
 import { useGroups, type Group } from "@/hooks/useGroups";
 import { transcribeAudio } from "@/services/transcriptionService";
+import { measureAudioDurationMs, resolveDurationMs } from "@/lib/audioDuration";
 
 const MAX_DURATION = 120;
 
@@ -57,6 +58,8 @@ const RecordPage = () => {
   
   const [isRecording, setIsRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  // Opt-in at publish time: generating a video costs money and takes a minute.
+  const [wantVideo, setWantVideo] = useState(false);
   const [title, setTitle] = useState("");
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [publishing, setPublishing] = useState(false);
@@ -274,11 +277,18 @@ const RecordPage = () => {
         }
       }
 
+      // The counter only ever rounds down, and the shortfall used to cut the
+      // last words off every generated video. Read the real length instead.
+      const measuredMs = await measureAudioDurationMs(audioBlob);
+      const durationMs = resolveDurationMs(measuredMs, elapsed);
+
       const { data: insertData, error: insertError } = await supabase.from("voice_posts").insert({
         user_id: user.id,
         title: title.trim(),
         audio_url: urlData.publicUrl,
-        duration: elapsed,
+        duration: Math.max(1, Math.round(durationMs / 1000)),
+        duration_ms: durationMs,
+        illustration_requested: wantVideo,
         image_url: imageUrl,
         location: location.trim() || null,
         transcription: transcription.trim() || null,
@@ -286,8 +296,12 @@ const RecordPage = () => {
       } as any).select().single();
       if (insertError) throw insertError;
 
-      toast.success("Published! 🎉");
-      setTitle(""); setAudioBlob(null); setElapsed(0);
+      toast.success(
+        wantVideo
+          ? "Publié ! On dessine ton anecdote, on te prévient 🎨"
+          : "Published! 🎉"
+      );
+      setTitle(""); setAudioBlob(null); setElapsed(0); setWantVideo(false);
       setImageFile(null); setImagePreview(null); setLocation(""); setTranscription("");
       
       // Start automatic transcription in background (if no manual transcription provided)
@@ -482,6 +496,41 @@ const RecordPage = () => {
               </select>
             )
           )}
+
+          {/* Opt-in: one free video a week, and it takes about a minute. */}
+          <button
+            type="button"
+            onClick={() => setWantVideo((v) => !v)}
+            aria-pressed={wantVideo}
+            className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg border text-left transition-colors ${
+              wantVideo
+                ? "border-primary/60 bg-primary/10"
+                : "border-border/50 bg-card/50 hover:bg-card"
+            }`}
+          >
+            <Sparkles size={15} className={wantVideo ? "text-primary" : "text-muted-foreground"} />
+            <span className="flex-1 min-w-0">
+              <span className="block text-xs font-medium text-foreground">
+                Illustrer en vidéo
+              </span>
+              <span className="block text-[10px] text-muted-foreground leading-tight">
+                {wantVideo
+                  ? "Prête dans une minute environ, on te prévient"
+                  : "Une gratuite par semaine"}
+              </span>
+            </span>
+            <span
+              className={`shrink-0 w-9 h-5 rounded-full p-0.5 transition-colors ${
+                wantVideo ? "bg-primary" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`block w-4 h-4 rounded-full bg-background transition-transform ${
+                  wantVideo ? "translate-x-4" : ""
+                }`}
+              />
+            </span>
+          </button>
 
           <button onClick={handlePublish} disabled={publishing || !audioBlob || !title.trim()} className="gradient-red text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium shadow-red flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity disabled:opacity-50">
             {publishing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}

@@ -244,3 +244,23 @@ export const FONT_CANDIDATES = [
   "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
   "/System/Library/Fonts/Helvetica.ttc",
 ];
+
+/**
+ * Narrows the JSONB column into usable segments.
+ *
+ * The database hands this back as free-form JSON, so it is validated rather
+ * than asserted: a malformed row should mean "no captions", never a crash
+ * halfway through a video.
+ */
+export function parseSegments(value: unknown): TimedSegment[] | null {
+  if (!Array.isArray(value)) return null;
+  const segments = value.filter(
+    (s): s is TimedSegment =>
+      typeof s === "object" &&
+      s !== null &&
+      typeof (s as TimedSegment).start_ms === "number" &&
+      typeof (s as TimedSegment).end_ms === "number" &&
+      typeof (s as TimedSegment).text === "string"
+  );
+  return segments.length > 0 ? segments : null;
+}

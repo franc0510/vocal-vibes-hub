@@ -10,7 +10,7 @@ import { writeFile } from "node:fs/promises";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { drawtextFilters, FONT_CANDIDATES, type Caption } from "./captions.js";
+import { drawtextFilters, FONT_CANDIDATES, type Caption } from "../../src/lib/captions.js";
 
 export interface VideoPanel {
   /** Absolute path to the panel image. */
