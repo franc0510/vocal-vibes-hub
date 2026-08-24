@@ -4,6 +4,10 @@ name: Benchmark illustrations
 #
 #   Actions → Benchmark illustrations → Run workflow
 #
+# Par défaut le run ne dépense RIEN : il affiche seulement l'estimation et les
+# anecdotes retenues. Choisir "générer les images" dans le premier menu pour
+# lancer réellement la génération.
+#
 # Le résultat (planche contact HTML + CSV) est téléchargeable en artefact
 # à la fin du run.
 #
@@ -22,18 +26,24 @@ name: Benchmark illustrations
 on:
   workflow_dispatch:
     inputs:
-      confirm:
-        description: 'Ce run dépense de l''argent réel. Taper "oui" pour confirmer.'
+      # Un menu plutôt qu'un mot à taper : impossible de se tromper, et le
+      # choix par défaut est celui qui ne coûte rien.
+      action:
+        description: "Que faire"
         required: true
-        default: "non"
+        default: estimer le coût (ne dépense rien)
+        type: choice
+        options:
+          - estimer le coût (ne dépense rien)
+          - générer les images (dépense réellement)
       titles:
-        description: 'Titres des anecdotes à tester, séparés par des points-virgules. Recherche approximative, une partie du titre suffit. Laisser vide pour utiliser le choix ci-dessous.'
+        description: "Titres des anecdotes à tester, séparés par des points-virgules. Recherche approximative, une partie du titre suffit. Laisser vide pour utiliser le choix ci-dessous."
         required: false
         default: ""
       source:
         description: "Si aucun titre n'est donné : quelles anecdotes prendre"
         required: true
-        default: "mes vraies anecdotes"
+        default: mes vraies anecdotes
         type: choice
         options:
           - mes vraies anecdotes
@@ -53,13 +63,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
-    steps:
-      - name: Vérifier la confirmation
-        if: inputs.confirm != 'oui'
-        run: |
-          echo "::error::Run annulé : le champ de confirmation doit valoir exactement \"oui\"."
-          exit 1
+    env:
+      GENERATE: ${{ inputs.action == 'générer les images (dépense réellement)' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      FAL_KEY: ${{ secrets.FAL_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
+    steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -69,41 +81,54 @@ jobs:
 
       - run: npm ci
 
-      - name: Estimation du coût
+      # Les options sont assemblées une seule fois, en shell plutôt qu'en
+      # expressions imbriquées : plus lisible, et les titres à espaces et
+      # accents sont correctement cités.
+      - name: Préparer les options
+        # Les entrées passent par l'environnement, jamais par interpolation
+        # directe dans le shell : un titre contenant une apostrophe, un
+        # guillemet ou un $ ne doit pas pouvoir casser — ni détourner — la
+        # commande.
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          FAL_KEY: ${{ secrets.FAL_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          IN_ANECDOTES: ${{ inputs.anecdotes }}
+          IN_TITLES: ${{ inputs.titles }}
+          IN_SOURCE: ${{ inputs.source }}
+          IN_MODELS: ${{ inputs.models }}
         run: |
-          npx tsx scripts/bench-illustration.ts \
-            --anecdotes "${{ inputs.anecdotes }}" \
-            ${{ inputs.titles && format('--titles "{0}"', inputs.titles) || (inputs.source == 'mes vraies anecdotes' && '--from-db' || '') }} \
-            ${{ inputs.models && format('--models {0}', inputs.models) || '' }}
+          ARGS=(--anecdotes "$IN_ANECDOTES")
+          if [ -n "$IN_TITLES" ]; then
+            ARGS+=(--titles "$IN_TITLES")
+          elif [ "$IN_SOURCE" = "mes vraies anecdotes" ]; then
+            ARGS+=(--from-db)
+          fi
+          if [ -n "$IN_MODELS" ]; then
+            ARGS+=(--models "$IN_MODELS")
+          fi
+          printf '%s\n' "${ARGS[@]}" > /tmp/bench-args
+          echo "Options : ${ARGS[*]}"
 
-      - name: Lancer le benchmark
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          FAL_KEY: ${{ secrets.FAL_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # Tourne toujours. Sans confirmation, c'est tout le run — et il est vert.
+      - name: Estimation
         run: |
-          npx tsx scripts/bench-illustration.ts --yes \
-            --anecdotes "${{ inputs.anecdotes }}" \
-            ${{ inputs.titles && format('--titles "{0}"', inputs.titles) || (inputs.source == 'mes vraies anecdotes' && '--from-db' || '') }} \
-            ${{ inputs.models && format('--models {0}', inputs.models) || '' }}
+          mapfile -t ARGS < /tmp/bench-args
+          npx tsx scripts/bench-illustration.ts "${ARGS[@]}"
+
+      - name: Génération
+        if: env.GENERATE == 'true'
+        run: |
+          mapfile -t ARGS < /tmp/bench-args
+          npx tsx scripts/bench-illustration.ts --yes "${ARGS[@]}"
 
       # Télécharge l'artefact, dézippe, ouvre index.html : la planche contact
       # s'affiche dans le navigateur, images comprises.
       - name: Publier la planche contact
-        if: always()
+        if: always() && env.GENERATE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: planche-contact
           path: bench-output/
           retention-days: 30
+          if-no-files-found: ignore
 
       - name: Récapitulatif
         if: always()
@@ -117,10 +142,15 @@ jobs:
               tail -n +2 bench-output/results.csv | while IFS=, read -r a m p c l e; do
                 echo "| $a | $m | $p | $c | $l | $e |"
               done
+              echo
+              echo "Télécharge l'artefact **planche-contact**, dézippe-le et ouvre \`index.html\`."
+              echo "Le critère qui décide : le personnage reste-t-il le même d'une case à l'autre ?"
+            elif [ "$GENERATE" = "true" ]; then
+              echo "Aucune image produite — voir les logs de l'étape **Génération**."
             else
-              echo "Aucun résultat produit — voir les logs ci-dessus."
+              echo "Estimation seulement, rien n'a été dépensé."
+              echo
+              echo "Les anecdotes retenues et le coût prévu sont dans les logs de l'étape **Estimation**."
+              echo "Pour générer réellement, relance en choisissant **générer les images**."
             fi
-            echo
-            echo "Télécharge l'artefact **planche-contact**, dézippe-le et ouvre \`index.html\`."
-            echo "Le critère qui décide : le personnage reste-t-il le même d'une case à l'autre ?"
           } >> "$GITHUB_STEP_SUMMARY"
