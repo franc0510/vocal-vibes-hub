@@ -15,7 +15,8 @@
  */
 
 import { mkdir, writeFile, readFile } from "node:fs/promises";
-import { assembleVideo, hasFfmpeg, type VideoPanel } from "./lib/assembleVideo.js";
+import { assembleVideo, findFont, hasFfmpeg, type VideoPanel } from "./lib/assembleVideo.js";
+import { captionsForPanels } from "./lib/captions.js";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,10 +39,10 @@ const SHARED = join(ROOT, "supabase", "functions", "_shared");
  * here and returned "Path /pro not found" — an id taken on trust rather than
  * observed. Anything unproven belongs on the --models flag, not in a default
  * that costs a column of red on everyone's contact sheet.
+ *
+ * FLUX.1 schnell and Qwen-Image were dropped on request after the first run.
  */
 const CANDIDATES: { provider: string; model: string; label: string }[] = [
-  { provider: "fal", model: "fal-ai/flux/schnell", label: "FLUX.1 schnell" },
-  { provider: "fal", model: "fal-ai/qwen-image", label: "Qwen-Image" },
   { provider: "fal", model: "fal-ai/bytedance/seedream/v4/text-to-image", label: "Seedream V4" },
   { provider: "fal", model: "fal-ai/ideogram/v3", label: "Ideogram 3.0" },
   { provider: "fal", model: "fal-ai/nano-banana", label: "Nano Banana" },
@@ -60,6 +61,8 @@ interface Anecdote {
   duration: number;
   transcription: string;
   audio_url?: string;
+  /** Timestamped chunks, when the transcription came from Whisper here. */
+  segments?: TranscriptSegment[];
 }
 
 /**
@@ -69,21 +72,42 @@ interface Anecdote {
  * Whisper costs a fraction of a cent per minute — irrelevant next to the image
  * generations this run is about.
  */
-async function transcribeViaFal(audioUrl: string): Promise<string> {
+interface WhisperResult {
+  text: string;
+  segments: TranscriptSegment[];
+}
+
+/**
+ * Whisper returns timestamped chunks alongside the text. Keeping them is what
+ * lets panels cut on sentence boundaries, and lets the captions show what is
+ * being said at the moment it is said.
+ */
+async function transcribeViaFal(audioUrl: string): Promise<WhisperResult> {
   const apiKey = process.env.FAL_KEY;
   if (!apiKey) throw new Error("FAL_KEY manquant : impossible de transcrire.");
 
   const res = await fetch("https://fal.run/fal-ai/whisper", {
     method: "POST",
     headers: { Authorization: `Key ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ audio_url: audioUrl }),
+    body: JSON.stringify({ audio_url: audioUrl, chunk_level: "segment" }),
   });
   if (!res.ok) throw new Error(`Transcription échouée : ${res.status} ${await res.text()}`);
 
   const json = await res.json();
   const text = (json?.text ?? "").trim();
   if (!text) throw new Error("Transcription vide");
-  return text;
+
+  // fal reports each chunk as a [start, end] pair in seconds.
+  const raw = Array.isArray(json?.chunks) ? json.chunks : [];
+  const segments: TranscriptSegment[] = raw
+    .map((c: { timestamp?: [number, number]; text?: string }) => ({
+      start_ms: Math.round((c.timestamp?.[0] ?? 0) * 1000),
+      end_ms: Math.round((c.timestamp?.[1] ?? 0) * 1000),
+      text: (c.text ?? "").trim(),
+    }))
+    .filter((c: TranscriptSegment) => c.text && c.end_ms > c.start_ms);
+
+  return { text, segments };
 }
 
 /**
@@ -96,8 +120,10 @@ async function fillMissingTranscriptions(anecdotes: Anecdote[]): Promise<void> {
   for (const a of anecdotes) {
     if (hasUsableTranscription(a) || !a.audio_url) continue;
     process.stdout.write(`  transcription de « ${a.title} »… `);
-    a.transcription = await transcribeViaFal(a.audio_url);
-    console.log(`${a.transcription.length} caractères`);
+    const result = await transcribeViaFal(a.audio_url);
+    a.transcription = result.text;
+    a.segments = result.segments;
+    console.log(`${result.text.length} caractères, ${result.segments.length} segments`);
   }
 }
 
@@ -479,6 +505,11 @@ async function main() {
     console.log("ℹ️  Pas d'OPENAI_API_KEY : storyboards et transcriptions passent par fal.\n");
   }
 
+  const fontFile = await findFont();
+  if (!fontFile) {
+    console.warn("⚠️  Aucune police trouvée : les vidéos n'auront pas de texte incrusté.\n");
+  }
+
   if (!(await hasFfmpeg())) {
     console.warn(
       "⚠️  ffmpeg introuvable : les images seront produites, mais aucune vidéo.\n" +
@@ -508,7 +539,7 @@ async function main() {
       storyboard = await buildStoryboard({
         title: anecdote.title,
         transcription: anecdote.transcription,
-        segments: null,
+        segments: anecdote.segments ?? null,
         durationSec: anecdote.duration,
         panelCount: panelsPer[i],
       });
@@ -590,12 +621,19 @@ async function main() {
             start_ms: scene.start_ms,
             end_ms: scene.end_ms,
           }));
+          // The speaker's own words, timed to the moment they are said.
+          const captions = anecdote.segments?.length
+            ? captionsForPanels(storyboard.scenes, anecdote.segments)
+            : undefined;
+
           await assembleVideo({
             panels,
             audioPath,
             outPath: join(videosDir, videoName),
             workDir: videosDir,
             tag: `${i}-${candidate.label.replace(/\W+/g, "")}`,
+            captions,
+            fontFile,
           });
           cell.video = `videos/${videoName}`;
           console.log(" · 🎬");
