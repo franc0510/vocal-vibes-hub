@@ -11,8 +11,9 @@ name: Benchmark illustrations
 #   OPENAI_API_KEY  (obligatoire : construit les storyboards)
 #   FAL_KEY         (obligatoire pour les modèles hébergés par fal)
 #   GEMINI_API_KEY  (optionnel)
-#   SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY
-#                   (uniquement pour tester tes vraies anecdotes)
+#
+# Lire tes anecdotes ne demande AUCUN secret : la connexion Supabase est lue
+# dans le .env du dépôt, exactement comme le fait l'application.
 #
 # ATTENTION : ce workflow n'apparaît dans l'onglet Actions que si ce fichier
 # est présent sur la branche par défaut (main). C'est une règle de GitHub,
@@ -25,16 +26,20 @@ on:
         description: 'Ce run dépense de l''argent réel. Taper "oui" pour confirmer.'
         required: true
         default: "non"
+      titles:
+        description: 'Titres des anecdotes à tester, séparés par des points-virgules. Recherche approximative, une partie du titre suffit. Laisser vide pour utiliser le choix ci-dessous.'
+        required: false
+        default: ""
       source:
-        description: "Quelles anecdotes tester"
+        description: "Si aucun titre n'est donné : quelles anecdotes prendre"
         required: true
-        default: "exemples"
+        default: "mes vraies anecdotes"
         type: choice
         options:
-          - exemples
           - mes vraies anecdotes
+          - exemples
       anecdotes:
-        description: "COMBIEN d'anecdotes tester (un nombre, pas un titre). Elles sont choisies automatiquement : les plus récentes transcrites."
+        description: "COMBIEN d'anecdotes prendre (un nombre). Ignoré si des titres sont donnés."
         required: true
         default: "2"
       models:
@@ -74,7 +79,7 @@ jobs:
         run: |
           npx tsx scripts/bench-illustration.ts \
             --anecdotes "${{ inputs.anecdotes }}" \
-            ${{ inputs.source == 'mes vraies anecdotes' && '--from-db' || '' }} \
+            ${{ inputs.titles && format('--titles "{0}"', inputs.titles) || (inputs.source == 'mes vraies anecdotes' && '--from-db' || '') }} \
             ${{ inputs.models && format('--models {0}', inputs.models) || '' }}
 
       - name: Lancer le benchmark
@@ -87,7 +92,7 @@ jobs:
         run: |
           npx tsx scripts/bench-illustration.ts --yes \
             --anecdotes "${{ inputs.anecdotes }}" \
-            ${{ inputs.source == 'mes vraies anecdotes' && '--from-db' || '' }} \
+            ${{ inputs.titles && format('--titles "{0}"', inputs.titles) || (inputs.source == 'mes vraies anecdotes' && '--from-db' || '') }} \
             ${{ inputs.models && format('--models {0}', inputs.models) || '' }}
 
       # Télécharge l'artefact, dézippe, ouvre index.html : la planche contact
