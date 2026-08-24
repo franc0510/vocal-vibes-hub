@@ -13,6 +13,8 @@ import { playExclusive, releaseAudio } from "@/lib/audioManager";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import defaultAvatarBg from "@/assets/default-avatar-bg.png";
+import StorySlideshow from "./StorySlideshow";
+import { useIllustrations } from "@/hooks/useIllustrations";
 
 const generateWaveform = (length: number): number[] =>
   Array.from({ length }, () => 0.15 + Math.random() * 0.85);
@@ -148,6 +150,11 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
 
   const avatarUrl = post.author.avatarUrl;
   const backgroundUrl = post.image_url || avatarUrl;
+
+  // Generated panels replace the still background when the anecdote has them.
+  const { panels } = useIllustrations(post.id, post.illustration_status);
+  const hasSlideshow = panels.length > 0;
+  const currentMs = progress * (post.duration || 0) * 1000;
 
   // Use preloaded audio (already loaded) or create new one
   useEffect(() => {
@@ -301,7 +308,16 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
 
   return (
     <div className="h-full w-full relative overflow-hidden flex flex-col">
-      {backgroundUrl ? (
+      {hasSlideshow ? (
+        <StorySlideshow
+          panels={panels}
+          currentMs={currentMs}
+          className="z-0"
+          overlay={
+            <div className={`absolute inset-0 ${isWinner ? "bg-gradient-to-b from-amber-500/20 via-background/60 to-background/90" : "bg-gradient-to-b from-background/40 via-background/60 to-background/90"}`} />
+          }
+        />
+      ) : backgroundUrl ? (
         <div className="absolute inset-0 z-0">
           <img src={backgroundUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
           <div className={`absolute inset-0 ${isWinner ? "bg-gradient-to-b from-amber-500/20 via-background/60 to-background/90" : "bg-gradient-to-b from-background/40 via-background/60 to-background/90"}`} />

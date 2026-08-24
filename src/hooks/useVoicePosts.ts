@@ -16,6 +16,8 @@ export interface VoicePostWithAuthor {
   image_url?: string | null;
   location?: string | null;
   group_id?: string | null;
+  illustration_status?: string | null;
+  illustration_cover_url?: string | null;
   author: {
     name: string;
     username: string;

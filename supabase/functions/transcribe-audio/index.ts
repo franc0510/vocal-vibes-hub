@@ -24,7 +24,7 @@ serve(async (req: Request) => {
       });
     }
 
-    const { audio_url, voice_post_id } = await req.json();
+    const { audio_url, voice_post_id, language } = await req.json();
 
     if (!audio_url || !voice_post_id) {
       return new Response(
@@ -47,7 +47,15 @@ serve(async (req: Request) => {
     const formData = new FormData();
     formData.append("file", new Blob([audioBuffer], { type: "audio/mpeg" }), "audio.mp3");
     formData.append("model", "whisper-1");
-    formData.append("language", "en"); // Can be made dynamic
+    // verbose_json gives us per-segment timestamps, which the illustration
+    // slideshow needs to know which image belongs to which moment.
+    formData.append("response_format", "verbose_json");
+    formData.append("timestamp_granularities[]", "segment");
+    // Only constrain the language when the caller knows it. Forcing a value
+    // here makes Whisper mis-hear (or translate) everything else.
+    if (typeof language === "string" && language.length > 0) {
+      formData.append("language", language);
+    }
 
     // Call OpenAI Whisper API
     const whisperResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -66,12 +74,24 @@ serve(async (req: Request) => {
     const transcriptionData = await whisperResponse.json();
     const transcriptionText = transcriptionData.text || "";
 
-    console.log(`✅ Transcription complete: "${transcriptionText.substring(0, 50)}..."`);
+    // Keep only what the slideshow needs, so the JSONB column stays small.
+    interface WhisperSegment { start?: number; end?: number; text?: string }
+    const segments = Array.isArray(transcriptionData.segments)
+      ? (transcriptionData.segments as WhisperSegment[]).map((s) => ({
+          start_ms: Math.round((s.start ?? 0) * 1000),
+          end_ms: Math.round((s.end ?? 0) * 1000),
+          text: (s.text ?? "").trim(),
+        }))
+      : null;
+
+    console.log(
+      `✅ Transcription complete (${transcriptionData.language ?? "?"}, ${segments?.length ?? 0} segments): "${transcriptionText.substring(0, 50)}..."`
+    );
 
     // Update voice_posts with transcription
     const { error: updateError } = await supabase
       .from("voice_posts")
-      .update({ transcription: transcriptionText })
+      .update({ transcription: transcriptionText, transcription_segments: segments })
       .eq("id", voice_post_id);
 
     if (updateError) {
@@ -82,6 +102,8 @@ serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         transcription: transcriptionText,
+        segments,
+        language: transcriptionData.language ?? null,
         voice_post_id,
       }),
       {

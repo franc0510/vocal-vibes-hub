@@ -1,0 +1,347 @@
+/**
+ * Image-model bench for story illustrations.
+ *
+ * Generates the same storyboard through several image models and lays the
+ * results out as a contact sheet, so the choice of provider is made on the
+ * pictures rather than on marketing pages.
+ *
+ * The storyboard is built ONCE per anecdote and reused across every model —
+ * otherwise you are comparing prompts, not models.
+ *
+ *   npx tsx scripts/bench-illustration.ts --help
+ *
+ * This script spends real money. It prints an estimate and refuses to run
+ * without --yes.
+ */
+
+import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// The shared modules are written for Supabase's Deno runtime. Giving them the
+// one global they need lets the bench exercise the exact same code path that
+// ships in the Edge Function.
+const shimTarget = globalThis as typeof globalThis & {
+  Deno?: { env: { get(key: string): string | undefined } };
+};
+shimTarget.Deno ??= { env: { get: (key: string) => process.env[key] } };
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(HERE, "..");
+const SHARED = join(ROOT, "supabase", "functions", "_shared");
+
+/** Every candidate, with the provider that serves it. */
+const CANDIDATES: { provider: string; model: string; label: string }[] = [
+  { provider: "fal", model: "fal-ai/flux/schnell", label: "FLUX.1 schnell" },
+  { provider: "fal", model: "fal-ai/flux-2/pro", label: "FLUX.2 pro" },
+  { provider: "fal", model: "fal-ai/qwen-image", label: "Qwen-Image" },
+  { provider: "fal", model: "fal-ai/bytedance/seedream/v4/text-to-image", label: "Seedream V4" },
+  { provider: "fal", model: "fal-ai/ideogram/v3", label: "Ideogram 3.0" },
+  { provider: "fal", model: "fal-ai/nano-banana", label: "Nano Banana" },
+  { provider: "openai", model: "gpt-image-1", label: "GPT Image" },
+];
+
+interface Anecdote {
+  title: string;
+  duration: number;
+  transcription: string;
+}
+
+interface Cell {
+  anecdote: string;
+  label: string;
+  model: string;
+  files: string[];
+  costUsd: number;
+  latencyMs: number;
+  error?: string;
+}
+
+function parseArgs(argv: string[]) {
+  const get = (flag: string, fallback?: string) => {
+    const i = argv.indexOf(flag);
+    return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
+  };
+  return {
+    yes: argv.includes("--yes"),
+    help: argv.includes("--help"),
+    fromDb: argv.includes("--from-db"),
+    anecdotes: Number(get("--anecdotes", "5")),
+    panels: Number(get("--panels", "0")) || 0, // 0 = derive from duration
+    models: get("--models")?.split(",").map((s) => s.trim()),
+    out: get("--out", join(ROOT, "bench-output")),
+  };
+}
+
+function usage() {
+  console.log(`
+Image-model bench for VocMe story illustrations.
+
+  npx tsx scripts/bench-illustration.ts --yes
+
+Options
+  --yes               Actually run. Without it, only the cost estimate prints.
+  --from-db           Use real transcribed anecdotes from your Supabase
+                      project instead of the bundled invented ones. Preferred:
+                      it tests how your users actually tell a story.
+  --anecdotes <n>     HOW MANY anecdotes to test — a count, not a title
+                      (default 5). Which ones are picked automatically:
+                      the most recent transcribed posts with --from-db,
+                      the first entries of bench-fixtures.json without it.
+  --panels <n>        Force a panel count (default: derived from duration).
+  --models <a,b>      Comma-separated model ids, defaults to all candidates.
+  --out <dir>         Output directory (default ./bench-output).
+
+Environment
+  OPENAI_API_KEY      Required — builds the storyboards, and serves GPT Image.
+  FAL_KEY             Required for every fal-hosted candidate.
+  GEMINI_API_KEY      Only if you add a Gemini candidate.
+  SUPABASE_URL        Required with --from-db.
+  SUPABASE_SERVICE_ROLE_KEY  Required with --from-db.
+`);
+}
+
+async function loadFixtures(limit: number): Promise<Anecdote[]> {
+  const raw = await readFile(join(HERE, "bench-fixtures.json"), "utf8");
+  return (JSON.parse(raw) as Anecdote[]).slice(0, limit);
+}
+
+/**
+ * Pulls real transcribed anecdotes from the project's database.
+ *
+ * Always prefer this over the fixtures: the fixtures are invented, and how
+ * your users actually tell a story is exactly the variable a model has to
+ * cope with. Needs the service role key, so it never runs from the app.
+ */
+async function loadFromDatabase(limit: number): Promise<Anecdote[]> {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "--from-db needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (Supabase → Settings → API)."
+    );
+  }
+
+  const query = new URLSearchParams({
+    select: "title,duration,transcription",
+    transcription: "not.is.null",
+    order: "created_at.desc",
+    // Over-fetch, then keep only the substantial ones.
+    limit: String(limit * 4),
+  });
+
+  const res = await fetch(`${url.replace(/\/$/, "")}/rest/v1/voice_posts?${query}`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Could not read voice_posts: ${res.status} ${await res.text()}`);
+  }
+
+  const rows = (await res.json()) as Anecdote[];
+  const usable = rows.filter((r) => (r.transcription ?? "").trim().length > 120);
+
+  if (usable.length === 0) {
+    throw new Error(
+      "No anecdote with a usable transcription found. Publish and transcribe a few first, or drop --from-db to use the bundled fixtures."
+    );
+  }
+  return usable.slice(0, limit);
+}
+
+async function loadAnecdotes(limit: number, fromDb: boolean): Promise<Anecdote[]> {
+  return fromDb ? loadFromDatabase(limit) : loadFixtures(limit);
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
+function contactSheet(cells: Cell[], anecdotes: Anecdote[], labels: string[]): string {
+  const byKey = new Map(cells.map((c) => [`${c.anecdote}::${c.label}`, c]));
+
+  const rows = anecdotes
+    .map((a) => {
+      const cols = labels
+        .map((label) => {
+          const cell = byKey.get(`${a.title}::${label}`);
+          if (!cell) return `<td class="cell"><div class="err">not run</div></td>`;
+          if (cell.error) return `<td class="cell"><div class="err">${escapeHtml(cell.error)}</div></td>`;
+          const strip = cell.files.map((f) => `<img src="${escapeHtml(f)}" loading="lazy">`).join("");
+          return `<td class="cell">
+            <div class="strip">${strip}</div>
+            <div class="meta">$${cell.costUsd.toFixed(3)} · ${(cell.latencyMs / 1000).toFixed(1)}s</div>
+          </td>`;
+        })
+        .join("");
+      return `<tr><th class="rowhead"><div>${escapeHtml(a.title)}</div><p>${escapeHtml(
+        a.transcription.slice(0, 180)
+      )}…</p></th>${cols}</tr>`;
+    })
+    .join("");
+
+  return `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bench illustrations VocMe</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.5 -apple-system, system-ui, sans-serif; margin: 0; padding: 24px; background: #fafaf8; color: #17151a; }
+  @media (prefers-color-scheme: dark) { body { background: #141318; color: #ece9e2; } }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 20px; opacity: .65; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid rgba(128,128,128,.35); vertical-align: top; }
+  thead th { position: sticky; top: 0; background: #17151a; color: #fff; padding: 8px 12px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+  .rowhead { width: 220px; padding: 10px 12px; text-align: left; font-weight: 600; }
+  .rowhead p { font-weight: 400; font-size: 12px; opacity: .6; margin: 6px 0 0; }
+  .cell { padding: 8px; }
+  .strip { display: flex; gap: 4px; }
+  .strip img { width: 96px; height: 170px; object-fit: cover; border-radius: 2px; background: rgba(128,128,128,.2); }
+  .meta { font-size: 11px; opacity: .6; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .err { font-size: 12px; color: #c8352a; max-width: 260px; }
+</style></head>
+<body>
+<h1>Bench illustrations — ligne claire</h1>
+<p class="sub">Même storyboard pour tous les modèles. Regarde d'abord si le personnage reste le même d'une case à l'autre.</p>
+<div class="scroll"><table>
+<thead><tr><th class="rowhead">Anecdote</th>${labels.map((l) => `<th>${escapeHtml(l)}</th>`).join("")}</tr></thead>
+<tbody>${rows}</tbody>
+</table></div>
+</body></html>`;
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) return usage();
+
+  const candidates = args.models
+    ? CANDIDATES.filter((c) => args.models!.includes(c.model))
+    : CANDIDATES;
+
+  if (candidates.length === 0) {
+    console.error("No candidate matched --models.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const { getStyle, buildPanelPrompt } = await import(join(SHARED, "styles.ts"));
+  const { getImageProvider, generateWithRetry } = await import(join(SHARED, "imageProviders.ts"));
+  const { buildStoryboard, planPanelCount } = await import(join(SHARED, "storyboard.ts"));
+
+  const anecdotes = await loadAnecdotes(args.anecdotes, args.fromDb);
+  const style = getStyle("ligne-claire");
+
+  const panelsPer = anecdotes.map((a) => args.panels || planPanelCount(a.duration));
+  const totalImages = panelsPer.reduce((s, n) => s + n, 0) * candidates.length;
+
+  console.log(`\nSource    : ${args.fromDb ? "ta base Supabase" : "anecdotes d'exemple (bench-fixtures.json)"}`);
+  anecdotes.forEach((a, i) => console.log(`            ${i + 1}. ${a.title} (${a.duration}s, ${panelsPer[i]} cases)`));
+  console.log(`Anecdotes : ${anecdotes.length}`);
+  console.log(`Modèles   : ${candidates.length} (${candidates.map((c) => c.label).join(", ")})`);
+  console.log(`Images    : ${totalImages}`);
+  console.log(`Coût estimé : environ $${(totalImages * 0.03).toFixed(2)} au tarif moyen constaté.\n`);
+
+  if (!args.yes) {
+    console.log("Relance avec --yes pour générer réellement.\n");
+    return;
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    console.error("OPENAI_API_KEY manquant : il sert à construire les storyboards.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const imagesDir = join(args.out, "images");
+  await mkdir(imagesDir, { recursive: true });
+
+  const cells: Cell[] = [];
+
+  for (const [i, anecdote] of anecdotes.entries()) {
+    console.log(`\n▸ ${anecdote.title}`);
+    process.stdout.write("  storyboard… ");
+
+    let storyboard;
+    try {
+      storyboard = await buildStoryboard({
+        title: anecdote.title,
+        transcription: anecdote.transcription,
+        segments: null,
+        durationSec: anecdote.duration,
+        panelCount: panelsPer[i],
+      });
+      console.log(`${storyboard.scenes.length} cases`);
+    } catch (err) {
+      console.log(`échec : ${err instanceof Error ? err.message : String(err)}`);
+      continue;
+    }
+
+    for (const candidate of candidates) {
+      process.stdout.write(`  ${candidate.label.padEnd(16)} `);
+      const cell: Cell = {
+        anecdote: anecdote.title,
+        label: candidate.label,
+        model: candidate.model,
+        files: [],
+        costUsd: 0,
+        latencyMs: 0,
+      };
+
+      try {
+        const provider = getImageProvider({ provider: candidate.provider, model: candidate.model });
+        const seed = 1234;
+
+        for (const scene of storyboard.scenes) {
+          const result = await generateWithRetry(provider, {
+            prompt: buildPanelPrompt(style, storyboard.cast, scene.description),
+            style,
+            aspectRatio: "9:16",
+            seed: seed + scene.idx,
+          });
+          const name = `${i}-${candidate.model.replace(/[^a-z0-9]+/gi, "_")}-${scene.idx}.jpg`;
+          await writeFile(join(imagesDir, name), result.bytes);
+          cell.files.push(`images/${name}`);
+          cell.costUsd += result.costUsd;
+          cell.latencyMs += result.latencyMs;
+        }
+        console.log(`ok — $${cell.costUsd.toFixed(3)} / ${(cell.latencyMs / 1000).toFixed(1)}s`);
+      } catch (err) {
+        cell.error = err instanceof Error ? err.message : String(err);
+        console.log(`échec : ${cell.error.slice(0, 80)}`);
+      }
+
+      cells.push(cell);
+    }
+  }
+
+  const labels = candidates.map((c) => c.label);
+  await writeFile(join(args.out, "index.html"), contactSheet(cells, anecdotes, labels), "utf8");
+
+  const csv = [
+    "anecdote,model,panels,cost_usd,latency_s,error",
+    ...cells.map((c) =>
+      [
+        JSON.stringify(c.anecdote),
+        c.model,
+        c.files.length,
+        c.costUsd.toFixed(4),
+        (c.latencyMs / 1000).toFixed(1),
+        JSON.stringify(c.error ?? ""),
+      ].join(",")
+    ),
+  ].join("\n");
+  await writeFile(join(args.out, "results.csv"), csv, "utf8");
+
+  const spent = cells.reduce((s, c) => s + c.costUsd, 0);
+  console.log(`\n✅ Terminé — $${spent.toFixed(2)} dépensés.`);
+  console.log(`   Planche contact : ${join(args.out, "index.html")}`);
+  console.log(`   Données         : ${join(args.out, "results.csv")}\n`);
+}
+
+main().catch((err) => {
+  // Configuration mistakes are the common case here, and a stack trace buries
+  // the one line that says what to fix.
+  console.error(`\n${err instanceof Error ? err.message : String(err)}\n`);
+  process.exitCode = 1;
+});

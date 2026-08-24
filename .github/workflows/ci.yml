@@ -1,0 +1,72 @@
+name: CI
+
+# Runs on every push so the project is verified without needing a local setup.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: Lint, types, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Types
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      # The repository does not have a clean lint baseline yet, so this
+      # reports without failing the job. Remove continue-on-error once the
+      # pre-existing violations are cleared.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+  migrations:
+    name: Migrations and row-level security
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      # Replays every migration from zero against a stubbed Supabase schema,
+      # then asserts that a third party cannot read, forge or delete another
+      # user's illustration panels.
+      - name: Verify
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: ./scripts/verify-migrations.sh
