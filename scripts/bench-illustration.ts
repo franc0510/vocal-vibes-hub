@@ -164,13 +164,35 @@ async function queryPosts(params: URLSearchParams): Promise<Anecdote[]> {
   return (await res.json()) as Anecdote[];
 }
 
-const hasUsableTranscription = (a: Anecdote) => (a.transcription ?? "").trim().length > 120;
+/**
+ * Below this a transcription cannot carry a storyboard: there is simply not
+ * enough narrative to split into panels.
+ */
+export const MIN_TRANSCRIPTION_LENGTH = 120;
+
+const transcriptionLength = (a: Anecdote) => (a.transcription ?? "").trim().length;
+const hasUsableTranscription = (a: Anecdote) =>
+  transcriptionLength(a) >= MIN_TRANSCRIPTION_LENGTH;
+
+/**
+ * Explains why a found post cannot be used.
+ *
+ * "not transcribed" and "transcribed but too short" look the same from the
+ * outside and have completely different fixes, so they are never merged into
+ * one message.
+ */
+function unusableReason(a: Anecdote): string {
+  const length = transcriptionLength(a);
+  if (length === 0) {
+    return "aucune transcription — la transcription automatique n'a pas tourné, ou a échoué";
+  }
+  return `transcription trop courte : ${length} caractères, il en faut ${MIN_TRANSCRIPTION_LENGTH}`;
+}
 
 /** Named anecdotes, matched loosely on the title so partial wording works. */
 async function loadByTitles(titles: string[]): Promise<Anecdote[]> {
   const found: Anecdote[] = [];
-  const missing: string[] = [];
-  const untranscribed: string[] = [];
+  const problems: string[] = [];
 
   for (const title of titles) {
     // PostgREST treats these as syntax inside a filter, so keep them out.
@@ -185,20 +207,32 @@ async function loadByTitles(titles: string[]): Promise<Anecdote[]> {
     });
 
     const rows = await queryPosts(params);
-    if (rows.length === 0) {
-      missing.push(title);
-    } else if (!rows.some(hasUsableTranscription)) {
-      untranscribed.push(rows[0].title);
+    const usable = rows.find(hasUsableTranscription);
+
+    if (usable) {
+      found.push(usable);
+    } else if (rows.length === 0) {
+      problems.push(`  • "${title}" — aucun post ne porte ce titre`);
     } else {
-      found.push(rows.find(hasUsableTranscription)!);
+      // Report every candidate: one of them may be the post they meant.
+      problems.push(`  • "${title}" — ${rows.length} post(s) trouvé(s), aucun utilisable :`);
+      for (const r of rows) problems.push(`      « ${r.title} » (${r.duration}s) → ${unusableReason(r)}`);
     }
   }
 
-  if (missing.length > 0 || untranscribed.length > 0) {
-    const lines = ["Certaines anecdotes demandées n'ont pas pu être utilisées :"];
-    for (const t of missing) lines.push(`  • "${t}" — aucun post trouvé avec ce titre`);
-    for (const t of untranscribed) lines.push(`  • "${t}" — trouvé, mais pas encore transcrit`);
-    if (found.length === 0) throw new Error(lines.join("\n"));
+  if (problems.length > 0) {
+    const lines = ["Certaines anecdotes demandées n'ont pas pu être utilisées :", ...problems];
+    if (found.length === 0) {
+      lines.push(
+        "",
+        "Rien à comparer, le benchmark s'arrête ici.",
+        "Options :",
+        "  – laisse la transcription se faire, puis relance ;",
+        "  – ou lance sur les anecdotes d'exemple (source « exemples ») pour",
+        "    comparer les modèles tout de suite, avec des textes fournis."
+      );
+      throw new Error(lines.join("\n"));
+    }
     console.warn(`\n⚠️  ${lines.join("\n")}\n`);
   }
 
