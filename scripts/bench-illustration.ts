@@ -15,6 +15,7 @@
  */
 
 import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { assembleVideo, type VideoPanel } from "./lib/assembleVideo.js";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -95,6 +96,8 @@ interface Cell {
   costUsd: number;
   latencyMs: number;
   error?: string;
+  /** Relative path to the assembled video, when ffmpeg produced one. */
+  video?: string;
 }
 
 function parseArgs(argv: string[]) {
@@ -332,10 +335,17 @@ function contactSheet(cells: Cell[], anecdotes: Anecdote[], labels: string[]): s
       const cols = labels
         .map((label) => {
           const cell = byKey.get(`${a.title}::${label}`);
-          if (!cell) return `<td class="cell"><div class="err">not run</div></td>`;
+          if (!cell) {
+            return `<td class="cell"><div class="err">Ce modèle n'a pas été lancé.</div></td>`;
+          }
           if (cell.error) return `<td class="cell"><div class="err">${escapeHtml(cell.error)}</div></td>`;
+
+          const video = cell.video
+            ? `<video src="${escapeHtml(cell.video)}" controls preload="metadata" playsinline></video>`
+            : `<div class="novideo">pas de vidéo (audio ou ffmpeg indisponible)</div>`;
           const strip = cell.files.map((f) => `<img src="${escapeHtml(f)}" loading="lazy">`).join("");
           return `<td class="cell">
+            ${video}
             <div class="strip">${strip}</div>
             <div class="meta">$${cell.costUsd.toFixed(3)} · ${(cell.latencyMs / 1000).toFixed(1)}s</div>
           </td>`;
@@ -365,13 +375,15 @@ function contactSheet(cells: Cell[], anecdotes: Anecdote[], labels: string[]): s
   .rowhead p { font-weight: 400; font-size: 12px; opacity: .6; margin: 6px 0 0; }
   .cell { padding: 8px; }
   .strip { display: flex; gap: 4px; }
-  .strip img { width: 96px; height: 170px; object-fit: cover; border-radius: 2px; background: rgba(128,128,128,.2); }
+  .strip img { width: 72px; height: 128px; object-fit: cover; border-radius: 2px; background: rgba(128,128,128,.2); }
+  .cell video { width: 240px; max-width: 100%; border-radius: 4px; background: #000; display: block; margin-bottom: 8px; }
+  .novideo { font-size: 11px; opacity: .5; margin-bottom: 8px; }
   .meta { font-size: 11px; opacity: .6; margin-top: 6px; font-variant-numeric: tabular-nums; }
   .err { font-size: 12px; color: #c8352a; max-width: 260px; }
 </style></head>
 <body>
 <h1>Bench illustrations — ligne claire</h1>
-<p class="sub">Même storyboard pour tous les modèles. Regarde d'abord si le personnage reste le même d'une case à l'autre.</p>
+<p class="sub">Même storyboard pour tous les modèles, mêmes anecdotes. Lance les vidéos : les planches défilent sur la vraie voix.<br>Le critère qui décide : le personnage reste-t-il le même d'une case à l'autre ?</p>
 <div class="scroll"><table>
 <thead><tr><th class="rowhead">Anecdote</th>${labels.map((l) => `<th>${escapeHtml(l)}</th>`).join("")}</tr></thead>
 <tbody>${rows}</tbody>
@@ -441,7 +453,11 @@ async function main() {
   await fillMissingTranscriptions(anecdotes);
 
   const imagesDir = join(args.out, "images");
+  const videosDir = join(args.out, "videos");
+  const audioDir = join(args.out, ".audio");
   await mkdir(imagesDir, { recursive: true });
+  await mkdir(videosDir, { recursive: true });
+  await mkdir(audioDir, { recursive: true });
 
   const cells: Cell[] = [];
 
@@ -460,8 +476,37 @@ async function main() {
       });
       console.log(`${storyboard.scenes.length} cases`);
     } catch (err) {
-      console.log(`échec : ${err instanceof Error ? err.message : String(err)}`);
+      const reason = err instanceof Error ? err.message : String(err);
+      console.log(`échec : ${reason}`);
+      // Record the failure against every model rather than skipping silently:
+      // otherwise the contact sheet shows "not run" everywhere and says
+      // nothing about why.
+      for (const candidate of candidates) {
+        cells.push({
+          anecdote: anecdote.title,
+          label: candidate.label,
+          model: candidate.model,
+          files: [],
+          costUsd: 0,
+          latencyMs: 0,
+          error: `Storyboard impossible — aucune image tentée.\n${reason}`,
+        });
+      }
       continue;
+    }
+
+    // Fetched once and shared by every model's video for this anecdote.
+    let audioPath: string | undefined;
+    if (anecdote.audio_url) {
+      try {
+        const res = await fetch(anecdote.audio_url);
+        if (res.ok) {
+          audioPath = join(audioDir, `${i}.audio`);
+          await writeFile(audioPath, new Uint8Array(await res.arrayBuffer()));
+        }
+      } catch {
+        /* no audio: the panels are still generated, just without a video */
+      }
     }
 
     for (const candidate of candidates) {
@@ -492,10 +537,35 @@ async function main() {
           cell.costUsd += result.costUsd;
           cell.latencyMs += result.latencyMs;
         }
-        console.log(`ok — $${cell.costUsd.toFixed(3)} / ${(cell.latencyMs / 1000).toFixed(1)}s`);
+        process.stdout.write(`ok — $${cell.costUsd.toFixed(3)} / ${(cell.latencyMs / 1000).toFixed(1)}s`);
       } catch (err) {
         cell.error = err instanceof Error ? err.message : String(err);
         console.log(`échec : ${cell.error.slice(0, 80)}`);
+      }
+
+      // The video is the point: the panels playing over the real voice.
+      if (!cell.error && audioPath && cell.files.length > 0) {
+        const videoName = `${i}-${candidate.model.replace(/[^a-z0-9]+/gi, "_")}.mp4`;
+        try {
+          const panels: VideoPanel[] = storyboard.scenes.map((scene, n) => ({
+            file: join(imagesDir, cell.files[n].replace("images/", "")),
+            start_ms: scene.start_ms,
+            end_ms: scene.end_ms,
+          }));
+          await assembleVideo({
+            panels,
+            audioPath,
+            outPath: join(videosDir, videoName),
+            workDir: videosDir,
+            tag: `${i}-${candidate.label.replace(/\W+/g, "")}`,
+          });
+          cell.video = `videos/${videoName}`;
+          console.log(" · 🎬");
+        } catch (err) {
+          console.log(` · vidéo impossible : ${err instanceof Error ? err.message.slice(0, 60) : ""}`);
+        }
+      } else if (!cell.error) {
+        console.log("");
       }
 
       cells.push(cell);
@@ -521,7 +591,18 @@ async function main() {
   await writeFile(join(args.out, "results.csv"), csv, "utf8");
 
   const spent = cells.reduce((s, c) => s + c.costUsd, 0);
-  console.log(`\n✅ Terminé — $${spent.toFixed(2)} dépensés.`);
+  const produced = cells.reduce((n, c) => n + c.files.length, 0);
+  const videos = cells.filter((c) => c.video).length;
+
+  if (produced === 0) {
+    console.error(
+      `\n❌ Aucune image produite — $${spent.toFixed(2)} dépensés.\n` +
+        "   La planche contact indique la cause pour chaque modèle."
+    );
+    process.exitCode = 1;
+  } else {
+    console.log(`\n✅ ${produced} images, ${videos} vidéos — $${spent.toFixed(2)} dépensés.`);
+  }
   console.log(`   Planche contact : ${join(args.out, "index.html")}`);
   console.log(`   Données         : ${join(args.out, "results.csv")}\n`);
 }

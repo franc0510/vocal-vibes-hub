@@ -189,25 +189,63 @@ function openaiCompleter(apiKey: string): LlmCompleter {
  * There is no schema enforcement here, so the shape is requested in the prompt
  * and the fences a chat model likes to add are stripped on the way out.
  */
+/**
+ * Model ids to try on any-llm, in order.
+ *
+ * Which ids an account can actually reach varies, and a wrong one comes back
+ * as a plain 404 — so this walks the list rather than betting on one name.
+ * Set STORYBOARD_FAL_MODEL to pin a single id and skip the search.
+ */
+const FAL_LLM_CANDIDATES = [
+  "google/gemini-2.5-flash",
+  "openai/gpt-4o-mini",
+  "openai/gpt-4o",
+  "anthropic/claude-3.5-sonnet",
+  "meta-llama/llama-3.1-8b-instruct",
+];
+
 function falCompleter(apiKey: string): LlmCompleter {
-  const model = Deno.env.get("STORYBOARD_FAL_MODEL") ?? "anthropic/claude-3.5-sonnet";
+  const pinned = Deno.env.get("STORYBOARD_FAL_MODEL");
+  const candidates = pinned ? [pinned] : FAL_LLM_CANDIDATES;
+
   return async (system, user) => {
-    const res = await fetch("https://fal.run/fal-ai/any-llm", {
-      method: "POST",
-      headers: { Authorization: `Key ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        system_prompt: `${system}\n\nReply with JSON only, matching exactly: {"cast": string, "scenes": [{"caption": string, "description": string}]}. No prose, no code fences.`,
-        prompt: user,
-      }),
-    });
-    if (!res.ok) throw new Error(`Storyboard model failed: ${await res.text()}`);
-    const json = await res.json();
-    const raw = json?.output ?? json?.response ?? json?.text;
-    if (typeof raw !== "string" || !raw.trim()) {
-      throw new Error("Storyboard model returned no content");
+    const failures: string[] = [];
+
+    for (const model of candidates) {
+      const res = await fetch("https://fal.run/fal-ai/any-llm", {
+        method: "POST",
+        headers: { Authorization: `Key ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          system_prompt: `${system}\n\nReply with JSON only, matching exactly: {"cast": string, "scenes": [{"caption": string, "description": string}]}. No prose, no code fences.`,
+          prompt: user,
+        }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        const raw = json?.output ?? json?.response ?? json?.text;
+        if (typeof raw === "string" && raw.trim()) return raw;
+        failures.push(`${model}: réponse vide`);
+        continue;
+      }
+
+      const body = await res.text();
+      failures.push(`${model}: ${res.status}`);
+      // A 404 means "not this id, try the next"; anything else is a real
+      // problem — a bad key or a rate limit — and retrying other ids only
+      // multiplies the same failure.
+      if (res.status !== 404) {
+        throw new Error(`Storyboard via fal a échoué (${model}, ${res.status}) : ${body}`);
+      }
     }
-    return raw;
+
+    throw new Error(
+      "Aucun modèle de storyboard disponible sur fal.\n" +
+        `Essayés : ${failures.join(", ")}.\n` +
+        "Choisis-en un accessible à ton compte sur fal.ai/models/fal-ai/any-llm " +
+        "et pose-le dans le secret STORYBOARD_FAL_MODEL."
+    );
   };
 }
 
