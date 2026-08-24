@@ -66,6 +66,8 @@ function parseArgs(argv: string[]) {
     yes: argv.includes("--yes"),
     help: argv.includes("--help"),
     fromDb: argv.includes("--from-db"),
+    // Titles are separated by ";" because a title may well contain a comma.
+    titles: get("--titles")?.split(";").map((s) => s.trim()).filter(Boolean),
     anecdotes: Number(get("--anecdotes", "5")),
     panels: Number(get("--panels", "0")) || 0, // 0 = derive from duration
     models: get("--models")?.split(",").map((s) => s.trim()),
@@ -81,13 +83,14 @@ Image-model bench for VocMe story illustrations.
 
 Options
   --yes               Actually run. Without it, only the cost estimate prints.
-  --from-db           Use real transcribed anecdotes from your Supabase
-                      project instead of the bundled invented ones. Preferred:
-                      it tests how your users actually tell a story.
+  --titles "a;b"      Test these specific anecdotes, matched loosely on their
+                      title, separated by semicolons. Implies reading your
+                      database. This is how you name the ones you care about.
+  --from-db           Without --titles: use the most recent transcribed
+                      anecdotes from your database rather than the bundled
+                      invented ones.
   --anecdotes <n>     HOW MANY anecdotes to test — a count, not a title
-                      (default 5). Which ones are picked automatically:
-                      the most recent transcribed posts with --from-db,
-                      the first entries of bench-fixtures.json without it.
+                      (default 5). Ignored when --titles is given.
   --panels <n>        Force a panel count (default: derived from duration).
   --models <a,b>      Comma-separated model ids, defaults to all candidates.
   --out <dir>         Output directory (default ./bench-output).
@@ -96,8 +99,10 @@ Environment
   OPENAI_API_KEY      Required — builds the storyboards, and serves GPT Image.
   FAL_KEY             Required for every fal-hosted candidate.
   GEMINI_API_KEY      Only if you add a Gemini candidate.
-  SUPABASE_URL        Required with --from-db.
-  SUPABASE_SERVICE_ROLE_KEY  Required with --from-db.
+
+Reading your anecdotes needs no extra secret: the connection is read from
+.env (VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY), the same values
+the app itself uses. Set SUPABASE_URL and SUPABASE_ANON_KEY to override.
 `);
 }
 
@@ -107,22 +112,108 @@ async function loadFixtures(limit: number): Promise<Anecdote[]> {
 }
 
 /**
- * Pulls real transcribed anecdotes from the project's database.
+ * Supabase connection details, taken from the same place the app takes them.
  *
- * Always prefer this over the fixtures: the fixtures are invented, and how
- * your users actually tell a story is exactly the variable a model has to
- * cope with. Needs the service role key, so it never runs from the app.
+ * The publishable key is enough to read anecdotes: the RLS policy on
+ * voice_posts allows any reader for posts that are not restricted to a group.
+ * Environment variables win over the committed .env so CI can point elsewhere.
  */
-async function loadFromDatabase(limit: number): Promise<Anecdote[]> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+async function supabaseConfig(): Promise<{ url: string; key: string }> {
+  let url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "";
+  let key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.SUPABASE_ANON_KEY ??
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    "";
+
   if (!url || !key) {
-    throw new Error(
-      "--from-db needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (Supabase → Settings → API)."
-    );
+    try {
+      const env = await readFile(join(ROOT, ".env"), "utf8");
+      for (const line of env.split("\n")) {
+        if (line.trim().startsWith("#")) continue;
+        const [name, ...rest] = line.split("=");
+        // Values are commonly quoted in a .env; the quotes are not part of them.
+        const value = rest.join("=").trim().replace(/^['"]|['"]$/g, "");
+        if (!value) continue;
+        if (!url && name.trim() === "VITE_SUPABASE_URL") url = value;
+        if (!key && name.trim() === "VITE_SUPABASE_PUBLISHABLE_KEY") key = value;
+      }
+    } catch {
+      /* no .env; the error below explains what to provide */
+    }
   }
 
-  const query = new URLSearchParams({
+  if (!url || !key) {
+    throw new Error(
+      "Impossible de trouver la configuration Supabase.\n" +
+        "Attendu VITE_SUPABASE_URL et VITE_SUPABASE_PUBLISHABLE_KEY dans .env,\n" +
+        "ou SUPABASE_URL et SUPABASE_ANON_KEY dans l'environnement."
+    );
+  }
+  return { url: url.replace(/\/$/, ""), key };
+}
+
+async function queryPosts(params: URLSearchParams): Promise<Anecdote[]> {
+  const { url, key } = await supabaseConfig();
+  const res = await fetch(`${url}/rest/v1/voice_posts?${params}`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Lecture de voice_posts impossible : ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as Anecdote[];
+}
+
+const hasUsableTranscription = (a: Anecdote) => (a.transcription ?? "").trim().length > 120;
+
+/** Named anecdotes, matched loosely on the title so partial wording works. */
+async function loadByTitles(titles: string[]): Promise<Anecdote[]> {
+  const found: Anecdote[] = [];
+  const missing: string[] = [];
+  const untranscribed: string[] = [];
+
+  for (const title of titles) {
+    // PostgREST treats these as syntax inside a filter, so keep them out.
+    const needle = title.trim().replace(/[,()*]/g, " ").trim();
+    if (!needle) continue;
+
+    const params = new URLSearchParams({
+      select: "title,duration,transcription",
+      title: `ilike.*${needle}*`,
+      order: "created_at.desc",
+      limit: "5",
+    });
+
+    const rows = await queryPosts(params);
+    if (rows.length === 0) {
+      missing.push(title);
+    } else if (!rows.some(hasUsableTranscription)) {
+      untranscribed.push(rows[0].title);
+    } else {
+      found.push(rows.find(hasUsableTranscription)!);
+    }
+  }
+
+  if (missing.length > 0 || untranscribed.length > 0) {
+    const lines = ["Certaines anecdotes demandées n'ont pas pu être utilisées :"];
+    for (const t of missing) lines.push(`  • "${t}" — aucun post trouvé avec ce titre`);
+    for (const t of untranscribed) lines.push(`  • "${t}" — trouvé, mais pas encore transcrit`);
+    if (found.length === 0) throw new Error(lines.join("\n"));
+    console.warn(`\n⚠️  ${lines.join("\n")}\n`);
+  }
+
+  return found;
+}
+
+/**
+ * The most recent transcribed anecdotes.
+ *
+ * Prefer real anecdotes over the fixtures: how people actually tell a story
+ * is exactly the variable a model has to cope with, and invented samples are
+ * written by someone who already knows what makes a good prompt.
+ */
+async function loadRecent(limit: number): Promise<Anecdote[]> {
+  const params = new URLSearchParams({
     select: "title,duration,transcription",
     transcription: "not.is.null",
     order: "created_at.desc",
@@ -130,26 +221,23 @@ async function loadFromDatabase(limit: number): Promise<Anecdote[]> {
     limit: String(limit * 4),
   });
 
-  const res = await fetch(`${url.replace(/\/$/, "")}/rest/v1/voice_posts?${query}`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` },
-  });
-  if (!res.ok) {
-    throw new Error(`Could not read voice_posts: ${res.status} ${await res.text()}`);
-  }
-
-  const rows = (await res.json()) as Anecdote[];
-  const usable = rows.filter((r) => (r.transcription ?? "").trim().length > 120);
-
+  const usable = (await queryPosts(params)).filter(hasUsableTranscription);
   if (usable.length === 0) {
     throw new Error(
-      "No anecdote with a usable transcription found. Publish and transcribe a few first, or drop --from-db to use the bundled fixtures."
+      "Aucune anecdote transcrite trouvée. Publie et laisse transcrire quelques posts,\n" +
+        "ou retire --from-db pour utiliser les anecdotes d'exemple."
     );
   }
   return usable.slice(0, limit);
 }
 
-async function loadAnecdotes(limit: number, fromDb: boolean): Promise<Anecdote[]> {
-  return fromDb ? loadFromDatabase(limit) : loadFixtures(limit);
+async function loadAnecdotes(
+  limit: number,
+  fromDb: boolean,
+  titles?: string[]
+): Promise<Anecdote[]> {
+  if (titles && titles.length > 0) return loadByTitles(titles);
+  return fromDb ? loadRecent(limit) : loadFixtures(limit);
 }
 
 function escapeHtml(s: string): string {
@@ -229,13 +317,18 @@ async function main() {
   const { getImageProvider, generateWithRetry } = await import(join(SHARED, "imageProviders.ts"));
   const { buildStoryboard, planPanelCount } = await import(join(SHARED, "storyboard.ts"));
 
-  const anecdotes = await loadAnecdotes(args.anecdotes, args.fromDb);
+  const anecdotes = await loadAnecdotes(args.anecdotes, args.fromDb, args.titles);
   const style = getStyle("ligne-claire");
 
   const panelsPer = anecdotes.map((a) => args.panels || planPanelCount(a.duration));
   const totalImages = panelsPer.reduce((s, n) => s + n, 0) * candidates.length;
 
-  console.log(`\nSource    : ${args.fromDb ? "ta base Supabase" : "anecdotes d'exemple (bench-fixtures.json)"}`);
+  const source = args.titles?.length
+    ? "ta base Supabase (anecdotes nommées)"
+    : args.fromDb
+      ? "ta base Supabase (les plus récentes)"
+      : "anecdotes d'exemple (bench-fixtures.json)";
+  console.log(`\nSource    : ${source}`);
   anecdotes.forEach((a, i) => console.log(`            ${i + 1}. ${a.title} (${a.duration}s, ${panelsPer[i]} cases)`));
   console.log(`Anecdotes : ${anecdotes.length}`);
   console.log(`Modèles   : ${candidates.length} (${candidates.map((c) => c.label).join(", ")})`);
