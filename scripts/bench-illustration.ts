@@ -16,7 +16,7 @@
 
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { assembleVideo, findFont, hasFfmpeg, type VideoPanel } from "./lib/assembleVideo.js";
-import { captionsForPanels } from "./lib/captions.js";
+import { captionsFromSegments } from "./lib/captions.js";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -65,22 +65,18 @@ interface Anecdote {
   segments?: TranscriptSegment[];
 }
 
-/**
- * Transcribes an anecdote through fal, so the benchmark does not depend on the
- * app's own transcription pipeline having run.
- *
- * Whisper costs a fraction of a cent per minute — irrelevant next to the image
- * generations this run is about.
- */
 interface WhisperResult {
   text: string;
   segments: TranscriptSegment[];
 }
 
 /**
- * Whisper returns timestamped chunks alongside the text. Keeping them is what
- * lets panels cut on sentence boundaries, and lets the captions show what is
- * being said at the moment it is said.
+ * Transcribes an anecdote through fal, so the benchmark does not depend on the
+ * app's own transcription pipeline having run. Whisper costs a fraction of a
+ * cent per minute — irrelevant next to the image generations.
+ *
+ * The timestamped chunks are the valuable part: they let panels cut on
+ * sentence boundaries, and let each caption appear as its words are spoken.
  */
 async function transcribeViaFal(audioUrl: string): Promise<WhisperResult> {
   const apiKey = process.env.FAL_KEY;
@@ -152,6 +148,7 @@ function parseArgs(argv: string[]) {
     titles: get("--titles")?.split(";").map((s) => s.trim()).filter(Boolean),
     anecdotes: Number(get("--anecdotes", "5")),
     panels: Number(get("--panels", "0")) || 0, // 0 = derive from duration
+    secondsPerPanel: Number(get("--seconds-per-panel", "0")) || 0,
     models: get("--models")?.split(",").map((s) => s.trim()),
     out: get("--out", join(ROOT, "bench-output")),
   };
@@ -174,11 +171,15 @@ Options
   --anecdotes <n>     HOW MANY anecdotes to test — a count, not a title
                       (default 5). Ignored when --titles is given.
   --panels <n>        Force a panel count (default: derived from duration).
+  --seconds-per-panel <n>
+                      How much speech one panel covers (default 4). Lower is
+                      smoother and costs proportionally more — panels are the
+                      unit you pay for.
   --models <a,b>      Comma-separated model ids, defaults to all candidates.
   --out <dir>         Output directory (default ./bench-output).
 
 Environment
-  FAL_KEY             Enough on its own: serves 5 of the 6 image candidates,
+  FAL_KEY             Enough on its own: serves every candidate but GPT Image,
                       builds the storyboards, and transcribes anecdotes the
                       app has not transcribed yet.
   OPENAI_API_KEY      Optional. Preferred for storyboards when present (strict
@@ -469,7 +470,9 @@ async function main() {
   const anecdotes = await loadAnecdotes(args.anecdotes, args.fromDb, args.titles);
   const style = getStyle("ligne-claire");
 
-  const panelsPer = anecdotes.map((a) => args.panels || planPanelCount(a.duration));
+  const panelsPer = anecdotes.map(
+    (a) => args.panels || planPanelCount(a.duration, args.secondsPerPanel || undefined)
+  );
   const totalImages = panelsPer.reduce((s, n) => s + n, 0) * candidates.length;
 
   const source = args.titles?.length
@@ -621,9 +624,10 @@ async function main() {
             start_ms: scene.start_ms,
             end_ms: scene.end_ms,
           }));
-          // The speaker's own words, timed to the moment they are said.
+          // Timed to the speech itself, not to the panels: a caption locked
+          // to an image sits frozen while the sentence is still being said.
           const captions = anecdote.segments?.length
-            ? captionsForPanels(storyboard.scenes, anecdote.segments)
+            ? captionsFromSegments(anecdote.segments)
             : undefined;
 
           await assembleVideo({

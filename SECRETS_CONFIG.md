@@ -39,17 +39,31 @@ clean failure.
 ### STORYBOARD_MODEL
 - Optional. Defaults to `gpt-4.1-mini`. Uses `OPENAI_API_KEY`.
 
+### SECONDS_PER_PANEL
+- Optional, defaults to `4`. How much speech one panel covers.
+- **This is the main cost lever.** Lower is smoother and costs proportionally
+  more; it was 15 and the result read as a slideshow rather than a story.
+
 ### ILLUSTRATION_DAILY_PANEL_QUOTA
-- Optional, defaults to `24` panels per user per rolling 24 hours
-  (roughly three full-length anecdotes). Panels are the unit that costs money.
+- Optional, defaults to `60` panels per user per rolling 24 hours
+  (roughly three full-length anecdotes at the default density).
+- Panels are the unit that costs money, so this and `SECONDS_PER_PANEL`
+  have to be adjusted together.
 
 ### Illustration cost per anecdote
+
+At the default density of one panel per 4 seconds, a 60-second anecdote is
+about 15 panels.
 
 | Poste | Coût |
 |-------|------|
 | Storyboard (1 LLM call) | ~$0.002–0.01 |
-| 6 panels | $0.02–0.80 depending on model |
-| **Realistic total** | **~$0.10–0.15 per illustrated anecdote** |
+| 15 panels @ $0.03 | ~$0.45 |
+| **Realistic total** | **~$0.45 per illustrated 60s anecdote** |
+
+Measured on a real run: Seedream V4 and Ideogram 3.0 at $0.03/image, Nano
+Banana at $0.039. Raising `SECONDS_PER_PANEL` back toward 8 halves this at
+the cost of fluidity.
 
 ### How to Set
 

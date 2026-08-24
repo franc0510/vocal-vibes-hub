@@ -77,6 +77,85 @@ export function wrapText(text: string, maxChars = MAX_LINE_CHARS, maxLines = MAX
  * A segment counts for the panel it overlaps most, so a sentence straddling a
  * cut appears once rather than being split across two boxes.
  */
+/** Below this a caption flashes past before it can be read. */
+export const MIN_CAPTION_MS = 1200;
+/** Above this the box has to be split, or it outlives what is being said. */
+export const MAX_CAPTION_CHARS = MAX_LINE_CHARS * MAX_LINES;
+
+/**
+ * Subtitles that follow the voice, one caption per stretch of speech.
+ *
+ * Captions used to be built per panel: a whole panel's worth of words sat
+ * frozen on screen for as long as the image did, which is exactly what
+ * "doesn't follow the audio" looks like. Timing them to Whisper's own chunks
+ * makes the text change as the sentence is spoken.
+ *
+ * Two adjustments keep it readable: chunks too brief to read are merged with
+ * the next, and a chunk carrying more text than a box holds is split across
+ * its own duration, in proportion to where the words fall.
+ */
+export function captionsFromSegments(segments: TimedSegment[]): Caption[] {
+  const usable = segments
+    .filter((s) => s.text.trim() && s.end_ms > s.start_ms)
+    .sort((a, b) => a.start_ms - b.start_ms);
+
+  // Merge anything too short to read into its neighbour.
+  const merged: TimedSegment[] = [];
+  for (const seg of usable) {
+    const previous = merged[merged.length - 1];
+    const tooBrief = seg.end_ms - seg.start_ms < MIN_CAPTION_MS;
+    const roomLeft =
+      previous && `${previous.text} ${seg.text}`.length <= MAX_CAPTION_CHARS;
+    if (previous && tooBrief && roomLeft) {
+      previous.text = `${previous.text} ${seg.text}`.trim();
+      previous.end_ms = seg.end_ms;
+    } else {
+      merged.push({ ...seg, text: seg.text.trim() });
+    }
+  }
+
+  const captions: Caption[] = [];
+  for (const seg of merged) {
+    if (seg.text.length <= MAX_CAPTION_CHARS) {
+      captions.push({ text: wrapText(seg.text), start_ms: seg.start_ms, end_ms: seg.end_ms });
+      continue;
+    }
+
+    // Too long for one box: split on words and share the chunk's own window,
+    // so the pieces still land while those words are being said.
+    const words = seg.text.split(/\s+/);
+    const pieces: string[] = [];
+    let current = "";
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (candidate.length <= MAX_CAPTION_CHARS) {
+        current = candidate;
+      } else {
+        pieces.push(current);
+        current = word;
+      }
+    }
+    if (current) pieces.push(current);
+
+    const total = pieces.reduce((n, p) => n + p.length, 0) || 1;
+    let cursor = seg.start_ms;
+    pieces.forEach((piece, i) => {
+      const share = (seg.end_ms - seg.start_ms) * (piece.length / total);
+      const end = i === pieces.length - 1 ? seg.end_ms : Math.round(cursor + share);
+      captions.push({ text: wrapText(piece), start_ms: Math.round(cursor), end_ms: end });
+      cursor = end;
+    });
+  }
+
+  return captions;
+}
+
+/**
+ * Captions locked to panel windows.
+ *
+ * Kept for the case where only panel boundaries are known and no per-chunk
+ * timing exists — it reads as a caption per image rather than as subtitles.
+ */
 export function captionsForPanels(
   panels: PanelWindow[],
   segments: TimedSegment[]

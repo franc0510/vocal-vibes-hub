@@ -33,13 +33,40 @@ export interface Storyboard {
   scenes: StoryboardScene[];
 }
 
-export const MIN_PANELS = 3;
-export const MAX_PANELS = 8;
+export const MIN_PANELS = 4;
+export const MAX_PANELS = 24;
 
-/** Roughly one panel per 15 seconds of speech, clamped to a readable range. */
-export function planPanelCount(durationSec: number): number {
+/**
+ * How much speech one panel covers.
+ *
+ * Started at 15s and the result read as a slideshow: a 42-second anecdote got
+ * three images, each frozen for a quarter of a minute. Four seconds is close
+ * to how often a comic actually changes frame, and it is what makes the video
+ * feel like it is being told rather than illustrated.
+ *
+ * It is the main cost lever — panels are what we pay for — so it stays
+ * configurable rather than baked in.
+ */
+export const DEFAULT_SECONDS_PER_PANEL = 4;
+
+/**
+ * Stays pure: callers resolve their own configuration and pass it in. Reading
+ * the environment in here would tie a plain calculation to a runtime global.
+ */
+export function planPanelCount(durationSec: number, secondsPerPanel?: number): number {
+  const step =
+    Number.isFinite(secondsPerPanel) && (secondsPerPanel as number) > 0
+      ? (secondsPerPanel as number)
+      : DEFAULT_SECONDS_PER_PANEL;
+
   if (!Number.isFinite(durationSec) || durationSec <= 0) return MIN_PANELS;
-  return Math.min(MAX_PANELS, Math.max(MIN_PANELS, Math.round(durationSec / 15)));
+  return Math.min(MAX_PANELS, Math.max(MIN_PANELS, Math.round(durationSec / step)));
+}
+
+/** The configured density for the Edge Function, or the default. */
+export function configuredSecondsPerPanel(): number {
+  const configured = Number(Deno.env.get("SECONDS_PER_PANEL"));
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SECONDS_PER_PANEL;
 }
 
 /**
