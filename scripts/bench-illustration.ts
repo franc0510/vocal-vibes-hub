@@ -65,6 +65,7 @@ function parseArgs(argv: string[]) {
   return {
     yes: argv.includes("--yes"),
     help: argv.includes("--help"),
+    fromDb: argv.includes("--from-db"),
     anecdotes: Number(get("--anecdotes", "5")),
     panels: Number(get("--panels", "0")) || 0, // 0 = derive from duration
     models: get("--models")?.split(",").map((s) => s.trim()),
@@ -80,7 +81,13 @@ Image-model bench for VocMe story illustrations.
 
 Options
   --yes               Actually run. Without it, only the cost estimate prints.
-  --anecdotes <n>     How many anecdotes to test (default 5).
+  --from-db           Use real transcribed anecdotes from your Supabase
+                      project instead of the bundled invented ones. Preferred:
+                      it tests how your users actually tell a story.
+  --anecdotes <n>     HOW MANY anecdotes to test — a count, not a title
+                      (default 5). Which ones are picked automatically:
+                      the most recent transcribed posts with --from-db,
+                      the first entries of bench-fixtures.json without it.
   --panels <n>        Force a panel count (default: derived from duration).
   --models <a,b>      Comma-separated model ids, defaults to all candidates.
   --out <dir>         Output directory (default ./bench-output).
@@ -89,12 +96,60 @@ Environment
   OPENAI_API_KEY      Required — builds the storyboards, and serves GPT Image.
   FAL_KEY             Required for every fal-hosted candidate.
   GEMINI_API_KEY      Only if you add a Gemini candidate.
+  SUPABASE_URL        Required with --from-db.
+  SUPABASE_SERVICE_ROLE_KEY  Required with --from-db.
 `);
 }
 
-async function loadAnecdotes(limit: number): Promise<Anecdote[]> {
+async function loadFixtures(limit: number): Promise<Anecdote[]> {
   const raw = await readFile(join(HERE, "bench-fixtures.json"), "utf8");
   return (JSON.parse(raw) as Anecdote[]).slice(0, limit);
+}
+
+/**
+ * Pulls real transcribed anecdotes from the project's database.
+ *
+ * Always prefer this over the fixtures: the fixtures are invented, and how
+ * your users actually tell a story is exactly the variable a model has to
+ * cope with. Needs the service role key, so it never runs from the app.
+ */
+async function loadFromDatabase(limit: number): Promise<Anecdote[]> {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "--from-db needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (Supabase → Settings → API)."
+    );
+  }
+
+  const query = new URLSearchParams({
+    select: "title,duration,transcription",
+    transcription: "not.is.null",
+    order: "created_at.desc",
+    // Over-fetch, then keep only the substantial ones.
+    limit: String(limit * 4),
+  });
+
+  const res = await fetch(`${url.replace(/\/$/, "")}/rest/v1/voice_posts?${query}`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Could not read voice_posts: ${res.status} ${await res.text()}`);
+  }
+
+  const rows = (await res.json()) as Anecdote[];
+  const usable = rows.filter((r) => (r.transcription ?? "").trim().length > 120);
+
+  if (usable.length === 0) {
+    throw new Error(
+      "No anecdote with a usable transcription found. Publish and transcribe a few first, or drop --from-db to use the bundled fixtures."
+    );
+  }
+  return usable.slice(0, limit);
+}
+
+async function loadAnecdotes(limit: number, fromDb: boolean): Promise<Anecdote[]> {
+  return fromDb ? loadFromDatabase(limit) : loadFixtures(limit);
 }
 
 function escapeHtml(s: string): string {
@@ -174,13 +229,15 @@ async function main() {
   const { getImageProvider, generateWithRetry } = await import(join(SHARED, "imageProviders.ts"));
   const { buildStoryboard, planPanelCount } = await import(join(SHARED, "storyboard.ts"));
 
-  const anecdotes = await loadAnecdotes(args.anecdotes);
+  const anecdotes = await loadAnecdotes(args.anecdotes, args.fromDb);
   const style = getStyle("ligne-claire");
 
   const panelsPer = anecdotes.map((a) => args.panels || planPanelCount(a.duration));
   const totalImages = panelsPer.reduce((s, n) => s + n, 0) * candidates.length;
 
-  console.log(`\nAnecdotes : ${anecdotes.length}`);
+  console.log(`\nSource    : ${args.fromDb ? "ta base Supabase" : "anecdotes d'exemple (bench-fixtures.json)"}`);
+  anecdotes.forEach((a, i) => console.log(`            ${i + 1}. ${a.title} (${a.duration}s, ${panelsPer[i]} cases)`));
+  console.log(`Anecdotes : ${anecdotes.length}`);
   console.log(`Modèles   : ${candidates.length} (${candidates.map((c) => c.label).join(", ")})`);
   console.log(`Images    : ${totalImages}`);
   console.log(`Coût estimé : environ $${(totalImages * 0.03).toFixed(2)} au tarif moyen constaté.\n`);
@@ -283,6 +340,8 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  // Configuration mistakes are the common case here, and a stack trace buries
+  // the one line that says what to fix.
+  console.error(`\n${err instanceof Error ? err.message : String(err)}\n`);
   process.exitCode = 1;
 });

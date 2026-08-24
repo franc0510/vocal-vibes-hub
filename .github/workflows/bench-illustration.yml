@@ -11,6 +11,12 @@ name: Benchmark illustrations
 #   OPENAI_API_KEY  (obligatoire : construit les storyboards)
 #   FAL_KEY         (obligatoire pour les modèles hébergés par fal)
 #   GEMINI_API_KEY  (optionnel)
+#   SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY
+#                   (uniquement pour tester tes vraies anecdotes)
+#
+# ATTENTION : ce workflow n'apparaît dans l'onglet Actions que si ce fichier
+# est présent sur la branche par défaut (main). C'est une règle de GitHub,
+# pas une option — sur une branche de travail, le bouton n'existe pas.
 
 on:
   workflow_dispatch:
@@ -19,8 +25,16 @@ on:
         description: 'Ce run dépense de l''argent réel. Taper "oui" pour confirmer.'
         required: true
         default: "non"
+      source:
+        description: "Quelles anecdotes tester"
+        required: true
+        default: "exemples"
+        type: choice
+        options:
+          - exemples
+          - mes vraies anecdotes
       anecdotes:
-        description: "Nombre d'anecdotes à tester (1 à 5)"
+        description: "COMBIEN d'anecdotes tester (un nombre, pas un titre). Elles sont choisies automatiquement : les plus récentes transcrites."
         required: true
         default: "2"
       models:
@@ -55,9 +69,12 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           FAL_KEY: ${{ secrets.FAL_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           npx tsx scripts/bench-illustration.ts \
             --anecdotes "${{ inputs.anecdotes }}" \
+            ${{ inputs.source == 'mes vraies anecdotes' && '--from-db' || '' }} \
             ${{ inputs.models && format('--models {0}', inputs.models) || '' }}
 
       - name: Lancer le benchmark
@@ -65,9 +82,12 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           FAL_KEY: ${{ secrets.FAL_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           npx tsx scripts/bench-illustration.ts --yes \
             --anecdotes "${{ inputs.anecdotes }}" \
+            ${{ inputs.source == 'mes vraies anecdotes' && '--from-db' || '' }} \
             ${{ inputs.models && format('--models {0}', inputs.models) || '' }}
 
       # Télécharge l'artefact, dézippe, ouvre index.html : la planche contact
