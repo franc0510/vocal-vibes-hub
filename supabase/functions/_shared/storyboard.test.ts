@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { assignTimings, planPanelCount, MIN_PANELS, MAX_PANELS, type TranscriptSegment } from "./storyboard";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import {
+  assignTimings,
+  buildStoryboard,
+  planPanelCount,
+  MIN_PANELS,
+  MAX_PANELS,
+  type TranscriptSegment,
+} from "./storyboard";
 
 describe("planPanelCount", () => {
   it("scales with duration, roughly one panel per 15 seconds", () => {
@@ -81,5 +88,69 @@ describe("assignTimings", () => {
     for (const n of [1, 3, 5, 8]) {
       expect(assignTimings(n, segments, 20000)).toHaveLength(n);
     }
+  });
+});
+
+describe("storyboard provider selection", () => {
+  const stubEnv = (env: Record<string, string | undefined>) =>
+    vi.stubGlobal("Deno", { env: { get: (k: string) => env[k] } });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("runs on FAL_KEY alone — no OpenAI key required", async () => {
+    stubEnv({ FAL_KEY: "fal-test" });
+    let calledUrl = "";
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+      calledUrl = String(url);
+      const auth = (init.headers as Record<string, string>).Authorization;
+      expect(auth).toBe("Key fal-test");
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            // Chat models fence their JSON even when told not to.
+            output: '```json\n{"cast":"le narrateur, 30 ans","scenes":[{"caption":"a","description":"une gare vide la nuit"}]}\n```',
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      );
+    });
+
+    const board = await buildStoryboard({
+      title: "La gare",
+      transcription: "J'ai raté le dernier train.",
+      durationSec: 45,
+      panelCount: 1,
+    });
+
+    expect(calledUrl).toContain("fal.run/fal-ai/any-llm");
+    expect(board.cast).toBe("le narrateur, 30 ans");
+    expect(board.scenes[0].description).toBe("une gare vide la nuit");
+    expect(board.scenes[0].end_ms).toBe(45000);
+  });
+
+  it("prefers OpenAI when both keys are present", async () => {
+    stubEnv({ FAL_KEY: "fal-test", OPENAI_API_KEY: "sk-test" });
+    let calledUrl = "";
+    vi.stubGlobal("fetch", (url: string) => {
+      calledUrl = String(url);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '{"cast":"x","scenes":[{"caption":"a","description":"b"}]}' } }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      );
+    });
+
+    await buildStoryboard({ title: "t", transcription: "x", durationSec: 30, panelCount: 1 });
+    expect(calledUrl).toContain("api.openai.com");
+  });
+
+  it("refuses clearly when neither key is set", async () => {
+    stubEnv({});
+    await expect(
+      buildStoryboard({ title: "t", transcription: "x", durationSec: 30, panelCount: 1 })
+    ).rejects.toThrow(/OPENAI_API_KEY.*FAL_KEY/);
   });
 });

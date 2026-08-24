@@ -74,19 +74,20 @@ jobs:
     steps:
       # Échouer ici coûte 5 secondes ; échouer après npm ci et un appel réseau
       # en coûte 40, et le message se perd dans les logs.
+      # FAL_KEY suffit à tout faire tourner : storyboards, transcriptions, et
+      # 6 des 7 modèles. OPENAI_API_KEY n'est qu'un bonus.
       - name: Vérifier les secrets
         if: env.GENERATE == 'true'
         run: |
-          MISSING=()
-          [ -z "$OPENAI_API_KEY" ] && MISSING+=("OPENAI_API_KEY — construit les storyboards, indispensable")
-          [ -z "$FAL_KEY" ] && MISSING+=("FAL_KEY — nécessaire pour 6 des 7 modèles")
-          if [ ${#MISSING[@]} -gt 0 ]; then
-            echo "::error::Secrets manquants : la génération ne peut pas démarrer."
-            printf '  • %s\n' "${MISSING[@]}"
-            echo
-            echo "À créer dans Settings → Secrets and variables → Actions → New repository secret."
-            echo "Note : une clé posée dans Supabase n'est pas visible ici, il faut la redéclarer."
+          if [ -z "$FAL_KEY" ]; then
+            echo "::error::FAL_KEY manquant — rien ne peut tourner sans lui."
+            echo "  À créer dans Settings → Secrets and variables → Actions → New repository secret."
+            echo "  Note : une clé posée dans Supabase n'est pas visible ici, il faut la redéclarer."
             exit 1
+          fi
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::notice::Pas d'OPENAI_API_KEY : storyboards et transcriptions passent par fal."
+            echo "Le candidat GPT Image sera le seul à échouer ; les 6 autres tournent normalement."
           fi
 
       - uses: actions/checkout@v4
