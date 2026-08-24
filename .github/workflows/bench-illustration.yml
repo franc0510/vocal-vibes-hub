@@ -8,12 +8,13 @@ name: Benchmark illustrations
 # anecdotes retenues. Choisir "générer les images" dans le premier menu pour
 # lancer réellement la génération.
 #
-# Le résultat (planche contact HTML + CSV) est téléchargeable en artefact
-# à la fin du run.
+# Le résultat est téléchargeable en artefact : une planche contact HTML avec
+# UNE VIDÉO PAR MODÈLE — les planches défilent sur la voix de l'anecdote — plus
+# les images et un CSV de coûts.
 #
 # Secrets à créer dans Settings → Secrets and variables → Actions :
-#   OPENAI_API_KEY  (obligatoire : construit les storyboards)
-#   FAL_KEY         (obligatoire pour les modèles hébergés par fal)
+#   FAL_KEY         (le seul indispensable : images, storyboards, transcription)
+#   OPENAI_API_KEY  (optionnel : storyboards plus fiables, et le modèle GPT Image)
 #   GEMINI_API_KEY  (optionnel)
 #
 # Lire tes anecdotes ne demande AUCUN secret : la connexion Supabase est lue
@@ -139,12 +140,16 @@ jobs:
 
       # Télécharge l'artefact, dézippe, ouvre index.html : la planche contact
       # s'affiche dans le navigateur, images comprises.
-      - name: Publier la planche contact
+      # Les audios téléchargés ne servent qu'au montage : inutile de les
+      # renvoyer dans l'artefact.
+      - name: Publier la planche contact et les vidéos
         if: always() && env.GENERATE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: planche-contact
-          path: bench-output/
+          path: |
+            bench-output/
+            !bench-output/.audio/
           retention-days: 30
           if-no-files-found: ignore
 
@@ -161,7 +166,8 @@ jobs:
                 echo "| $a | $m | $p | $c | $l | $e |"
               done
               echo
-              echo "Télécharge l'artefact **planche-contact**, dézippe-le et ouvre \`index.html\`."
+              echo "Télécharge l'artefact **planche-contact**, dézippe-le et ouvre \`index.html\` :"
+              echo "les vidéos y sont lisibles directement, planches sur la voix."
               echo "Le critère qui décide : le personnage reste-t-il le même d'une case à l'autre ?"
             elif [ "$GENERATE" = "true" ]; then
               echo "Aucune image produite — voir les logs de l'étape **Génération**."

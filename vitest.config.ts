@@ -9,7 +9,11 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     // Edge Function helpers are plain TypeScript and worth testing too.
-    include: ["src/**/*.{test,spec}.{ts,tsx}", "supabase/functions/**/*.{test,spec}.ts"],
+    include: [
+      "src/**/*.{test,spec}.{ts,tsx}",
+      "supabase/functions/**/*.{test,spec}.ts",
+      "scripts/**/*.{test,spec}.ts",
+    ],
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
