@@ -4,6 +4,7 @@ import { getStyle, buildPanelPrompt, DEFAULT_STYLE_ID } from "../_shared/styles.
 import { getImageProvider, generateWithRetry } from "../_shared/imageProviders.ts";
 import {
   buildStoryboard,
+  configuredSecondsPerPanel,
   planPanelCount,
   type Storyboard,
   type TranscriptSegment,
@@ -19,10 +20,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const BUCKET = "story_images";
 /**
- * Budget in panels, not in stories: panels are what we actually pay for, and
- * a story is 3 to 8 of them. 24 is roughly three full-length anecdotes a day.
+ * Budget in panels, not in stories: panels are what we actually pay for.
+ *
+ * At the current density a minute of speech is about 15 panels, so 60 is
+ * roughly three full anecdotes a day. Raising the density raises the bill in
+ * proportion — these two settings have to move together.
  */
-const DAILY_PANEL_QUOTA = Number(Deno.env.get("ILLUSTRATION_DAILY_PANEL_QUOTA") ?? "24");
+const DAILY_PANEL_QUOTA = Number(Deno.env.get("ILLUSTRATION_DAILY_PANEL_QUOTA") ?? "60");
 /** Generated in small parallel batches: fast enough, gentle on rate limits. */
 const CONCURRENCY = 3;
 
@@ -149,7 +153,7 @@ async function processPost(post: IllustratablePost, styleId: string) {
       transcription: post.transcription,
       segments: post.transcription_segments,
       durationSec: post.duration,
-      panelCount: planPanelCount(post.duration),
+      panelCount: planPanelCount(post.duration, configuredSecondsPerPanel()),
     });
 
     const coverUrl = await generateAndStore(post, storyboard, styleId);
@@ -211,7 +215,10 @@ serve(async (req: Request) => {
     if (quotaError) {
       // A broken quota check must not take the feature down; log and let it through.
       console.error("Quota check failed, allowing through:", quotaError.message);
-    } else if ((count ?? 0) + planPanelCount(post.duration) > DAILY_PANEL_QUOTA) {
+    } else if (
+      (count ?? 0) + planPanelCount(post.duration, configuredSecondsPerPanel()) >
+      DAILY_PANEL_QUOTA
+    ) {
       return json(
         { error: "You have illustrated enough anecdotes for today. Try again tomorrow." },
         429

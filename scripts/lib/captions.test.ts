@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   wrapText,
   captionsForPanels,
+  captionsFromSegments,
   drawtextFilters,
   MAX_LINE_CHARS,
   MAX_LINES,
+  MIN_CAPTION_MS,
   type TimedSegment,
 } from "./captions";
 
@@ -102,5 +104,59 @@ describe("drawtextFilters", () => {
   it("centres the box and lifts it clear of the bottom edge", () => {
     expect(filters[0]).toContain("x=(w-text_w)/2");
     expect(filters[0]).toMatch(/y=h-text_h-\d+/);
+  });
+});
+
+describe("captionsFromSegments", () => {
+  it("gives each stretch of speech its own timing, so the text follows the voice", () => {
+    const caps = captionsFromSegments([
+      { start_ms: 0, end_ms: 2500, text: "Voilà, petite histoire." },
+      { start_ms: 2500, end_ms: 6000, text: "J'étais avec Arthur." },
+      { start_ms: 6000, end_ms: 9500, text: "On sortait du bar." },
+    ]);
+    expect(caps).toHaveLength(3);
+    expect(caps[0]).toMatchObject({ start_ms: 0, end_ms: 2500 });
+    expect(caps[2].text).toContain("bar");
+  });
+
+  it("merges a chunk too brief to read into the one before it", () => {
+    const caps = captionsFromSegments([
+      { start_ms: 0, end_ms: 2000, text: "Bon," },
+      { start_ms: 2000, end_ms: 2400, text: "euh," },
+      { start_ms: 2400, end_ms: 5000, text: "voilà." },
+    ]);
+    expect(caps.length).toBeLessThan(3);
+    for (const c of caps) expect(c.end_ms - c.start_ms).toBeGreaterThanOrEqual(MIN_CAPTION_MS);
+  });
+
+  it("splits a chunk carrying more words than a box holds", () => {
+    const long = "mot ".repeat(60).trim();
+    const caps = captionsFromSegments([{ start_ms: 0, end_ms: 12000, text: long }]);
+    expect(caps.length).toBeGreaterThan(1);
+    // The pieces tile the original window without gap or overrun.
+    expect(caps[0].start_ms).toBe(0);
+    expect(caps[caps.length - 1].end_ms).toBe(12000);
+    for (let i = 1; i < caps.length; i++) expect(caps[i].start_ms).toBe(caps[i - 1].end_ms);
+  });
+
+  it("never overlaps two captions, which would stack two boxes on screen", () => {
+    const caps = captionsFromSegments([
+      { start_ms: 0, end_ms: 3000, text: "Un." },
+      { start_ms: 3000, end_ms: 6000, text: "Deux." },
+      { start_ms: 6000, end_ms: 9000, text: "Trois." },
+    ]);
+    for (let i = 1; i < caps.length; i++) {
+      expect(caps[i].start_ms).toBeGreaterThanOrEqual(caps[i - 1].end_ms);
+    }
+  });
+
+  it("ignores empty or backwards chunks rather than emitting a blank box", () => {
+    const caps = captionsFromSegments([
+      { start_ms: 0, end_ms: 3000, text: "   " },
+      { start_ms: 5000, end_ms: 4000, text: "à l'envers" },
+      { start_ms: 6000, end_ms: 9000, text: "correct" },
+    ]);
+    expect(caps).toHaveLength(1);
+    expect(caps[0].text).toBe("correct");
   });
 });

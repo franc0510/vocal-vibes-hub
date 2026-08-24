@@ -9,9 +9,15 @@ import {
 } from "./storyboard";
 
 describe("planPanelCount", () => {
-  it("scales with duration, roughly one panel per 15 seconds", () => {
-    expect(planPanelCount(60)).toBe(4);
-    expect(planPanelCount(90)).toBe(6);
+  it("gives a panel every few seconds, not every quarter minute", () => {
+    // 15s per panel turned a 42s anecdote into three frozen images.
+    expect(planPanelCount(60)).toBe(15);
+    expect(planPanelCount(42)).toBeGreaterThanOrEqual(10);
+  });
+
+  it("honours an explicit density, the main cost lever", () => {
+    expect(planPanelCount(60, 10)).toBe(6);
+    expect(planPanelCount(60, 2)).toBe(24);
   });
 
   it("stays within the readable range", () => {

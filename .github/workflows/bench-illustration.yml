@@ -54,6 +54,10 @@ on:
         description: "COMBIEN d'anecdotes prendre (un nombre). Ignoré si des titres sont donnés."
         required: true
         default: "2"
+      seconds_per_panel:
+        description: "Fluidité : secondes d'audio par planche. Plus bas = plus fluide et plus cher. 4 par défaut."
+        required: false
+        default: "4"
       models:
         description: "Modèles, séparés par des virgules. Vide = tous les candidats."
         required: false
@@ -125,6 +129,7 @@ jobs:
           IN_TITLES: ${{ inputs.titles }}
           IN_SOURCE: ${{ inputs.source }}
           IN_MODELS: ${{ inputs.models }}
+          IN_SPP: ${{ inputs.seconds_per_panel }}
         run: |
           ARGS=(--anecdotes "$IN_ANECDOTES")
           if [ -n "$IN_TITLES" ]; then
@@ -134,6 +139,9 @@ jobs:
           fi
           if [ -n "$IN_MODELS" ]; then
             ARGS+=(--models "$IN_MODELS")
+          fi
+          if [ -n "$IN_SPP" ]; then
+            ARGS+=(--seconds-per-panel "$IN_SPP")
           fi
           printf '%s\n' "${ARGS[@]}" > /tmp/bench-args
           echo "Options : ${ARGS[*]}"
