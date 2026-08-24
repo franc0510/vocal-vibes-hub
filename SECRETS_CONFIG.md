@@ -31,6 +31,9 @@ clean failure.
 ### FAL_KEY
 - **Required when** `IMAGE_PROVIDER=fal`
 - **How to get**: https://fal.ai/dashboard/keys
+- Also serves, on its own: Whisper transcription (when `OPENAI_API_KEY` is
+  absent), the storyboard model, and the video composition. A project holding
+  only this key is fully functional.
 
 ### GEMINI_API_KEY
 - **Required when** `IMAGE_PROVIDER=gemini`
@@ -44,11 +47,11 @@ clean failure.
 - **This is the main cost lever.** Lower is smoother and costs proportionally
   more; it was 15 and the result read as a slideshow rather than a story.
 
-### ILLUSTRATION_DAILY_PANEL_QUOTA
-- Optional, defaults to `60` panels per user per rolling 24 hours
-  (roughly three full-length anecdotes at the default density).
-- Panels are the unit that costs money, so this and `SECONDS_PER_PANEL`
-  have to be adjusted together.
+### ILLUSTRATION_WEEKLY_ALLOWANCE
+- Optional, defaults to `1` free generation per user per rolling 7 days.
+- Beyond it, a row in `illustration_credits` buys one generation and is spent.
+  Nothing grants credits yet — selling them on iOS requires Apple's in-app
+  purchase, which is separate work. The table is the seam it plugs into.
 
 ### Illustration cost per anecdote
 
@@ -59,7 +62,8 @@ about 15 panels.
 |-------|------|
 | Storyboard (1 LLM call) | ~$0.002–0.01 |
 | 15 panels @ $0.03 | ~$0.45 |
-| **Realistic total** | **~$0.45 per illustrated 60s anecdote** |
+| Video composition | ~$0.012 |
+| **Realistic total** | **~$0.46 per illustrated 60s anecdote** |
 
 Measured on a real run: Seedream V4 and Ideogram 3.0 at $0.03/image, Nano
 Banana at $0.039. Raising `SECONDS_PER_PANEL` back toward 8 halves this at

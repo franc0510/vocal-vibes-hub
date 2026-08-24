@@ -5,6 +5,7 @@ import { Settings, LogOut, Camera, Loader2, X, Play } from "lucide-react";
 import VoiceCard from "@/components/VoiceCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
+import { parseSegments } from "@/lib/captions";
 import { useFollows } from "@/hooks/useFollows";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -52,6 +53,7 @@ const ProfilePage = () => {
         likes_count: likeMap.get(p.id) ?? p.likes_count ?? 0,
         comments_count: commentMap.get(p.id) ?? p.comments_count ?? 0,
         transcription: p.transcription || null,
+        transcription_segments: parseSegments(p.transcription_segments),
         image_url: p.image_url || null,
         location: p.location || null,
         author: {

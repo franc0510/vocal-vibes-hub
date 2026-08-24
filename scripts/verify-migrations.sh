@@ -113,6 +113,38 @@ check "le propriétaire peut supprimer les siens" "0" "$(q "SELECT count(*) FROM
 q "DELETE FROM voice_posts WHERE id='$POST'" >/dev/null
 check "cascade à la suppression du post" "0" "$(q "SELECT count(*) FROM post_illustrations WHERE post_id='$POST'")"
 
+echo "▸ Vidéo et crédits"
+check "bucket story_videos public" "t" \
+  "$(q "SELECT public FROM storage.buckets WHERE id='story_videos'")"
+
+q "INSERT INTO public.voice_posts (id, user_id, title, audio_url, duration)
+   VALUES ('$POST','$OWNER','Test vidéo','http://audio',60)" >/dev/null
+check "video_status par défaut = none" "none" "$(q "SELECT video_status FROM voice_posts WHERE id='$POST'")"
+
+q "UPDATE voice_posts SET video_status='bogus' WHERE id='$POST'" >/dev/null 2>&1 \
+  && check "video_status invalide rejeté" "rejeté" "accepté" \
+  || check "video_status invalide rejeté" "rejeté" "rejeté"
+
+check "illustration_requested par défaut = false" "f" \
+  "$(q "SELECT illustration_requested FROM voice_posts WHERE id='$POST'")"
+
+q "INSERT INTO public.illustration_credits (user_id, credits) VALUES ('$OWNER', 3)" >/dev/null
+check "le propriétaire lit son solde" "3" \
+  "$(as authenticated "$OWNER" "SELECT credits FROM illustration_credits WHERE user_id='$OWNER';" 2>/dev/null)"
+
+# Le point sensible : personne ne doit pouvoir s'offrir des générations.
+check "un tiers ne voit pas le solde d'autrui" "" \
+  "$(as authenticated "$INTRUDER" "SELECT credits FROM illustration_credits WHERE user_id='$OWNER';" 2>/dev/null)"
+
+as authenticated "$OWNER" "UPDATE illustration_credits SET credits=999 WHERE user_id='$OWNER';" >/dev/null 2>&1 || true
+check "personne ne peut se créditer" "3" "$(q "SELECT credits FROM illustration_credits WHERE user_id='$OWNER'")"
+
+q "INSERT INTO public.illustration_credits (user_id, credits) VALUES ('$INTRUDER', -1)" >/dev/null 2>&1 \
+  && check "solde négatif rejeté" "rejeté" "accepté" \
+  || check "solde négatif rejeté" "rejeté" "rejeté"
+
+q "DELETE FROM voice_posts WHERE id='$POST'" >/dev/null
+
 echo
 if [ "$failures" -eq 0 ]; then
   echo "✅ Tout est bon."

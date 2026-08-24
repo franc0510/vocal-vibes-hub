@@ -232,6 +232,24 @@ export type Database = {
           },
         ]
       }
+      illustration_credits: {
+        Row: {
+          credits: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          credits?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          credits?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       post_illustrations: {
         Row: {
           caption: string | null
@@ -324,8 +342,13 @@ export type Database = {
           created_at: string
           duration: number
           id: string
+          duration_ms: number | null
           illustration_cover_url: string | null
+          illustration_generated_at: string | null
+          illustration_requested: boolean
           illustration_status: string
+          video_status: string
+          video_url: string | null
           image_url: string | null
           likes_count: number
           location: string | null
@@ -342,8 +365,13 @@ export type Database = {
           created_at?: string
           duration?: number
           id?: string
+          duration_ms?: number | null
           illustration_cover_url?: string | null
+          illustration_generated_at?: string | null
+          illustration_requested?: boolean
           illustration_status?: string
+          video_status?: string
+          video_url?: string | null
           image_url?: string | null
           likes_count?: number
           location?: string | null
@@ -360,8 +388,13 @@ export type Database = {
           created_at?: string
           duration?: number
           id?: string
+          duration_ms?: number | null
           illustration_cover_url?: string | null
+          illustration_generated_at?: string | null
+          illustration_requested?: boolean
           illustration_status?: string
+          video_status?: string
+          video_url?: string | null
           image_url?: string | null
           likes_count?: number
           location?: string | null

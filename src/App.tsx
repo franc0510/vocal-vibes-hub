@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useDailyNotification } from "@/hooks/useDailyNotification";
 import { useWeeklyNotifications } from "@/hooks/useWeeklyNotifications";
+import { useStoryIllustrationNotifications } from "@/hooks/useStoryIllustrationNotifications";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
@@ -45,6 +46,7 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
 const AppRoutes = () => {
   useDailyNotification();
   useWeeklyNotifications();
+  useStoryIllustrationNotifications();
   useRealtimeNotifications();
 
   // Handle OAuth deep link callback on native platforms

@@ -153,8 +153,10 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
 
   // Generated panels replace the still background when the anecdote has them.
   const { panels } = useIllustrations(post.id, post.illustration_status);
-  const hasSlideshow = panels.length > 0;
-  const currentMs = progress * (post.duration || 0) * 1000;
+  // The assembled MP4 when it exists, the panels themselves while it is still
+  // being made — the story is watchable either way.
+  const hasSlideshow = panels.length > 0 || Boolean(post.video_url);
+  const currentMs = progress * (post.duration_ms ?? (post.duration || 0) * 1000);
 
   // Use preloaded audio (already loaded) or create new one
   useEffect(() => {
@@ -312,6 +314,9 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
         <StorySlideshow
           panels={panels}
           currentMs={currentMs}
+          videoUrl={post.video_url}
+          isPlaying={isPlaying}
+          segments={post.transcription_segments}
           className="z-0"
           overlay={
             <div className={`absolute inset-0 ${isWinner ? "bg-gradient-to-b from-amber-500/20 via-background/60 to-background/90" : "bg-gradient-to-b from-background/40 via-background/60 to-background/90"}`} />

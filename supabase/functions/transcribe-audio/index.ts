@@ -1,131 +1,99 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { transcribe } from "../_shared/transcribe.ts";
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
 if (!SUPABASE_URL) throw new Error("Missing SUPABASE_URL");
 if (!SUPABASE_SERVICE_ROLE_KEY) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS, "Content-Type": "application/json" },
+  });
+
+/**
+ * Hands the illustration job to its own function.
+ *
+ * The storyboard needs the transcription, which does not exist when the post
+ * is published — so the chain is closed here, on the server, rather than by
+ * the app polling and hoping.
+ */
+async function chainIntoIllustration(voicePostId: string) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/illustrate-story`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ voice_post_id: voicePostId, internal: true }),
+  });
+  if (!res.ok) {
+    console.error(`⚠️ Could not start illustration for ${voicePostId}: ${await res.text()}`);
+  }
+}
+
 serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+
   try {
-    // CORS
-    if (req.method === "OPTIONS") {
-      return new Response("ok", {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST",
-          "Access-Control-Allow-Headers": "Content-Type",
-        },
-      });
-    }
-
     const { audio_url, voice_post_id, language } = await req.json();
-
     if (!audio_url || !voice_post_id) {
-      return new Response(
-        JSON.stringify({ error: "Missing audio_url or voice_post_id" }),
-        { status: 400 }
-      );
+      return json({ error: "Missing audio_url or voice_post_id" }, 400);
     }
 
-    console.log(`🎤 Transcribing audio for post ${voice_post_id}: ${audio_url}`);
+    console.log(`🎤 Transcribing ${voice_post_id}`);
 
-    // Fetch audio file
-    const audioResponse = await fetch(audio_url);
-    if (!audioResponse.ok) {
-      throw new Error(`Failed to fetch audio: ${audioResponse.statusText}`);
-    }
-
-    const audioBuffer = await audioResponse.arrayBuffer();
-
-    // Create FormData for Whisper API
-    const formData = new FormData();
-    formData.append("file", new Blob([audioBuffer], { type: "audio/mpeg" }), "audio.mp3");
-    formData.append("model", "whisper-1");
-    // verbose_json gives us per-segment timestamps, which the illustration
-    // slideshow needs to know which image belongs to which moment.
-    formData.append("response_format", "verbose_json");
-    formData.append("timestamp_granularities[]", "segment");
-    // Only constrain the language when the caller knows it. Forcing a value
-    // here makes Whisper mis-hear (or translate) everything else.
-    if (typeof language === "string" && language.length > 0) {
-      formData.append("language", language);
-    }
-
-    // Call OpenAI Whisper API
-    const whisperResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: formData,
-    });
-
-    if (!whisperResponse.ok) {
-      const error = await whisperResponse.text();
-      throw new Error(`Whisper API error: ${error}`);
-    }
-
-    const transcriptionData = await whisperResponse.json();
-    const transcriptionText = transcriptionData.text || "";
-
-    // Keep only what the slideshow needs, so the JSONB column stays small.
-    interface WhisperSegment { start?: number; end?: number; text?: string }
-    const segments = Array.isArray(transcriptionData.segments)
-      ? (transcriptionData.segments as WhisperSegment[]).map((s) => ({
-          start_ms: Math.round((s.start ?? 0) * 1000),
-          end_ms: Math.round((s.end ?? 0) * 1000),
-          text: (s.text ?? "").trim(),
-        }))
-      : null;
+    const result = await transcribe({ audioUrl: audio_url, language });
 
     console.log(
-      `✅ Transcription complete (${transcriptionData.language ?? "?"}, ${segments?.length ?? 0} segments): "${transcriptionText.substring(0, 50)}..."`
+      `✅ ${result.provider}: ${result.text.length} chars, ${result.segments.length} segments, lang=${result.language ?? "?"}`
     );
 
-    // Update voice_posts with transcription
     const { error: updateError } = await supabase
       .from("voice_posts")
-      .update({ transcription: transcriptionText, transcription_segments: segments })
+      .update({
+        transcription: result.text,
+        transcription_segments: result.segments.length > 0 ? result.segments : null,
+      })
       .eq("id", voice_post_id);
 
-    if (updateError) {
-      throw new Error(`Failed to update voice_post: ${updateError.message}`);
+    if (updateError) throw new Error(`Failed to update voice_post: ${updateError.message}`);
+
+    // The publish-time switch decides whether a video follows.
+    const { data: post } = await supabase
+      .from("voice_posts")
+      .select("illustration_requested, illustration_status")
+      .eq("id", voice_post_id)
+      .single();
+
+    if (post?.illustration_requested && post.illustration_status === "none") {
+      await chainIntoIllustration(voice_post_id);
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        transcription: transcriptionText,
-        segments,
-        language: transcriptionData.language ?? null,
-        voice_post_id,
-      }),
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
-    );
+    return json({
+      success: true,
+      transcription: result.text,
+      segments: result.segments,
+      language: result.language,
+      provider: result.provider,
+      voice_post_id,
+    });
   } catch (error) {
     console.error("❌ Transcription error:", error);
-    return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error during transcription",
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
+    return json(
+      { error: error instanceof Error ? error.message : "Unknown error during transcription" },
+      500
     );
   }
 });
