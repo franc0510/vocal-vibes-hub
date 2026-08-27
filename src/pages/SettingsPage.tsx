@@ -157,6 +157,21 @@ const SettingsPage = () => {
           </button>
         </section>
 
+        {/* Diagnostic — what the feed actually received on this device. */}
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Diagnostic</h2>
+          <button
+            onClick={() => navigate("/diag")}
+            className="w-full flex items-center gap-3 bg-card border border-border/50 rounded-xl px-4 py-3 text-left hover:bg-secondary/30 transition-colors"
+          >
+            <Users size={18} className="text-primary" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-foreground">État du feed</p>
+              <p className="text-xs text-muted-foreground">Ce que l'app a reçu, dans l'ordre</p>
+            </div>
+          </button>
+        </section>
+
         {/* Actions */}
         <section className="space-y-3 pt-2">
           <button

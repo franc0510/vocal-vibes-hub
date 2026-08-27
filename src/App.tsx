@@ -9,6 +9,7 @@ import SearchPage from "@/pages/SearchPage";
 import UserProfilePage from "@/pages/UserProfilePage";
 import PostPage from "@/pages/PostPage";
 import ExploreFeedPage from "@/pages/ExploreFeedPage";
+import DiagPage from "@/pages/DiagPage";
 import RecordPage from "@/pages/RecordPage";
 import ProfilePage from "@/pages/ProfilePage";
 import MessagesPage from "@/pages/MessagesPage";
@@ -110,6 +111,7 @@ const AppRoutes = () => {
             <Route path="/user/:userId" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
             <Route path="/post/:postId" element={<ProtectedRoute><PostPage /></ProtectedRoute>} />
             <Route path="/vocme/:postId" element={<ProtectedRoute><ExploreFeedPage /></ProtectedRoute>} />
+            <Route path="/diag" element={<ProtectedRoute><DiagPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/groups" element={<ProtectedRoute><GroupsPage /></ProtectedRoute>} />
