@@ -69,7 +69,9 @@ Environment
 The Supabase URL is read from .env, same as the app.
 
 Panels are never regenerated: this uploads what the run already produced. The
-only cost is composing the video, about $0.012 per anecdote.
+only cost is composing the video, about $0.012 per anecdote, plus a fraction of
+a cent to transcribe anecdotes that have no timestamps yet — without them the
+video would end on the whole-second counter and clip the last words.
 `);
 }
 
@@ -149,7 +151,7 @@ async function main() {
 
   const { assignTimings, planPanelCount } = await import(join(SHARED, "storyboard.ts"));
   const { composeVideo } = await import(join(SHARED, "composeVideo.ts"));
-  const { realDurationMs } = await import(join(SHARED, "transcribe.ts"));
+  const { realDurationMs, transcribe } = await import(join(SHARED, "transcribe.ts"));
 
   const order = await anecdoteOrder(args.dir);
   const wanted = args.titles
@@ -209,11 +211,41 @@ async function main() {
       continue;
     }
 
-    // Prefer the storyboard the run saved; older artifacts predate it, so the
-    // timings are rebuilt from the recording instead.
-    const segments = Array.isArray(post.transcription_segments)
+    // The recording's real length has to come from somewhere better than
+    // `duration`, which is a whole-second counter and always a little short —
+    // that shortfall is exactly what cut the closing words off every video.
+    //
+    // Posts made before that was fixed have no duration_ms, and posts made
+    // while transcription was broken in production have no segments either. So
+    // when both are missing, transcribe here: a fraction of a cent buys the
+    // true end of speech, sentence-boundary cuts, and captions the app can
+    // draw. The segments are written back so the app has them too.
+    let segments = Array.isArray(post.transcription_segments)
       ? (post.transcription_segments as { start_ms: number; end_ms: number; text: string }[])
       : [];
+
+    if (segments.length === 0 && !post.duration_ms) {
+      process.stdout.write("  pas d'horodatage en base, transcription… ");
+      const result = await transcribe({ audioUrl: post.audio_url });
+      segments = result.segments;
+      console.log(`${segments.length} segments`);
+
+      if (segments.length > 0) {
+        await rest(`voice_posts?id=eq.${post.id}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            transcription: result.text,
+            transcription_segments: segments,
+          }),
+        });
+      }
+    }
+
+    const totalMs = realDurationMs(post.duration, segments, post.duration_ms);
+
+    // Prefer the storyboard the run saved; older artifacts predate it, so the
+    // timings are rebuilt from the recording instead.
     let timings: { start_ms: number; end_ms: number }[];
     try {
       const saved = JSON.parse(await readFile(join(args.dir, `storyboard-${index}.json`), "utf8"));
@@ -222,14 +254,8 @@ async function main() {
         end_ms: s.end_ms,
       }));
     } catch {
-      timings = assignTimings(
-        panelFiles.length,
-        segments,
-        realDurationMs(post.duration, segments, post.duration_ms)
-      );
+      timings = assignTimings(panelFiles.length, segments, totalMs);
     }
-
-    const totalMs = realDurationMs(post.duration, segments, post.duration_ms);
 
     const rows = [];
     for (const [idx, file] of panelFiles.entries()) {

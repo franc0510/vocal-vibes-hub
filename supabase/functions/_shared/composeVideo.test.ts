@@ -84,7 +84,18 @@ describe("realDurationMs", () => {
   });
 
   it("falls back to the declared seconds when nothing better exists", () => {
+    // This is the dangerous case, and the reason the import script transcribes
+    // before composing: an old post has no duration_ms and, if transcription
+    // was broken when it was published, no segments either. Nothing here can
+    // recover the missing fraction of a second — so the caller must supply
+    // segments rather than trust this fallback.
     expect(realDurationMs(44, [])).toBe(44000);
+  });
+
+  it("is beaten by segments as soon as there are any — hence transcribing first", () => {
+    const withSegments = realDurationMs(44, [{ start_ms: 0, end_ms: 44_300, text: "fin" }]);
+    const without = realDurationMs(44, []);
+    expect(withSegments).toBeGreaterThan(without);
   });
 
   it("never returns less than what was actually spoken", () => {
