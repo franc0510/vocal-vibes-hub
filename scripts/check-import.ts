@@ -65,15 +65,32 @@ async function reachable(url: string): Promise<string> {
  * does — same filters, same orderFeed — and prints the head of it.
  */
 async function replayFeed(url: string, service: string, username: string) {
+  // Matched loosely on purpose: people give the name they see, which may be
+  // the display name, and may not match the stored case.
+  const needle = encodeURIComponent(`*${username}*`);
   const profiles = (await query(
     url,
     service,
-    `profiles?select=id,username,display_name&username=eq.${encodeURIComponent(username)}`
-  )) as { id: string; username: string; display_name: string }[];
+    `profiles?select=id,username,display_name&or=(username.ilike.${needle},display_name.ilike.${needle})`
+  )) as { id: string; username: string | null; display_name: string | null }[];
 
   if (profiles.length === 0) {
-    console.log(`\n❌ Aucun compte nommé « ${username} ».\n`);
+    console.log(`\n❌ Aucun compte ne correspond à « ${username} ».`);
+    const sample = (await query(
+      url,
+      service,
+      "profiles?select=username,display_name&limit=15"
+    )) as { username: string | null; display_name: string | null }[];
+    console.log("   Comptes existants, pour retrouver le bon :");
+    for (const p of sample) {
+      console.log(`     @${p.username ?? "—"}  (${p.display_name ?? "sans nom"})`);
+    }
+    console.log("");
     return;
+  }
+
+  if (profiles.length > 1) {
+    console.log(`\n(${profiles.length} comptes correspondent ; je prends le premier.)`);
   }
   const me = profiles[0];
   console.log(`\n═══ Feed reconstitué pour ${me.display_name} (@${me.username}) ═══`);
