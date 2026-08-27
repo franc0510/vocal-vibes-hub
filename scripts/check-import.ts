@@ -57,6 +57,41 @@ async function reachable(url: string): Promise<string> {
 }
 
 /**
+ * Finds an account from its auth record, by email or by the part before the @.
+ *
+ * The profiles table carries no username in this project, so a handle someone
+ * uses for themselves often lives only on the auth side. Admin API rather than
+ * PostgREST: the auth schema is not exposed over REST.
+ */
+async function profileFromAuth(
+  url: string,
+  service: string,
+  needle: string
+): Promise<{ id: string; username: string | null; display_name: string | null } | null> {
+  const res = await fetch(`${url}/auth/v1/admin/users?per_page=500`, {
+    headers: { apikey: service, Authorization: `Bearer ${service}` },
+  });
+  if (!res.ok) return null;
+
+  const { users } = (await res.json()) as { users: { id: string; email?: string }[] };
+  const want = needle.toLowerCase();
+  const hit = users.find((u) => {
+    const email = (u.email ?? "").toLowerCase();
+    return email === want || email.split("@")[0] === want || email.startsWith(want);
+  });
+  if (!hit) return null;
+
+  const rows = (await query(
+    url,
+    service,
+    `profiles?select=id,username,display_name&id=eq.${hit.id}`
+  )) as { id: string; username: string | null; display_name: string | null }[];
+
+  console.log(`  (trouvé via l'e-mail du compte : ${hit.email})`);
+  return rows[0] ?? { id: hit.id, username: null, display_name: hit.email ?? null };
+}
+
+/**
  * Replays the feed exactly as the app builds it, for one real account.
  *
  * "It is not first in my feed" cannot be settled by reading the ordering code:
@@ -73,6 +108,14 @@ async function replayFeed(url: string, service: string, username: string) {
     service,
     `profiles?select=id,username,display_name&or=(username.ilike.${needle},display_name.ilike.${needle})`
   )) as { id: string; username: string | null; display_name: string | null }[];
+
+  // profiles.username is null for every account in this project, so a handle
+  // people use to describe themselves may only exist on the auth record —
+  // as the local part of their email. Fall back to that before giving up.
+  if (profiles.length === 0) {
+    const byEmail = await profileFromAuth(url, service, username);
+    if (byEmail) profiles.push(byEmail);
+  }
 
   if (profiles.length === 0) {
     console.log(`\n❌ Aucun compte ne correspond à « ${username} ».`);
