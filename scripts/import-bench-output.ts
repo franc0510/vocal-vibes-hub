@@ -100,6 +100,32 @@ async function supabaseConfig() {
   return cachedConfig;
 }
 
+/** Postgres codes for "no such column" and "no such table". */
+const SCHEMA_CODES = new Set(["42703", "42P01"]);
+
+const MIGRATION_HELP = `
+Ta base n'a pas encore le schéma de la fonctionnalité vidéo.
+
+Les Edge Functions sont déployées, mais les deux migrations SQL ne le sont pas :
+sans elles, ni les colonnes (transcription_segments, duration_ms, video_url…),
+ni la table post_illustrations, ni les buckets n'existent.
+
+À faire une fois, dans le tableau de bord Supabase → SQL Editor :
+colle le contenu de scripts/sql/appliquer-video.sql et exécute.
+Le script est idempotent : le relancer ne casse rien.
+`;
+
+/** Deployed functions without the migrations is the failure worth explaining. */
+function schemaError(body: string): Error | null {
+  try {
+    const parsed = JSON.parse(body) as { code?: string; message?: string };
+    if (!parsed.code || !SCHEMA_CODES.has(parsed.code)) return null;
+    return new Error(`${parsed.message}\n${MIGRATION_HELP}`);
+  } catch {
+    return null;
+  }
+}
+
 async function rest(path: string, init: RequestInit = {}) {
   const { url, key } = await supabaseConfig();
   const res = await fetch(`${url}/rest/v1/${path}`, {
@@ -112,8 +138,26 @@ async function rest(path: string, init: RequestInit = {}) {
       ...(init.headers ?? {}),
     },
   });
-  if (!res.ok) throw new Error(`${path} → ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw schemaError(body) ?? new Error(`${path} → ${res.status} ${body}`);
+  }
   return res.status === 204 ? null : res.json();
+}
+
+/**
+ * Fails before anything is downloaded, uploaded or paid for.
+ *
+ * Touching every column and table the import writes to means a half-applied
+ * schema surfaces here rather than halfway through the first anecdote, with
+ * panels already uploaded and a video already billed.
+ */
+async function checkSchema() {
+  await rest(
+    "voice_posts?select=id,duration_ms,transcription_segments,video_url,video_status," +
+      "illustration_status,illustration_cover_url,illustration_generated_at&limit=1"
+  );
+  await rest("post_illustrations?select=id,post_id,idx,start_ms,end_ms&limit=1");
 }
 
 async function uploadToBucket(bucket: string, path: string, body: Uint8Array, contentType: string) {
@@ -168,6 +212,14 @@ async function main() {
   console.log(`Anecdotes : ${wanted.length}`);
   for (const t of wanted) console.log(`            • ${t}`);
   console.log(`\nLes planches ne sont PAS régénérées. Seule la vidéo est facturée (~0,012 $ pièce).\n`);
+
+  // Checked in the dry run too — a missing schema is exactly what the dry run
+  // exists to catch, and catching it here costs one request instead of a
+  // half-finished import.
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    await checkSchema();
+    console.log("Schéma vérifié : les migrations sont bien appliquées.\n");
+  }
 
   if (!args.yes) {
     console.log("Relance avec --yes pour écrire réellement.\n");
