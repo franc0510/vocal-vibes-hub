@@ -11,6 +11,7 @@
  */
 
 import { readFile, readdir } from "node:fs/promises";
+import { resolveEnv } from "./lib/env.js";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -60,28 +61,45 @@ Options
   --yes            Actually write. Without it, nothing is uploaded.
 
 Environment
-  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   Required — this writes to posts.
-  FAL_KEY                                   Required, for the video only.
+  SUPABASE_SERVICE_ROLE_KEY   Required — this writes to posts, so the
+                              publishable key will not do. Supabase dashboard
+                              → Project Settings → API → service_role.
+  FAL_KEY                     Required, for the video composition only.
+
+The Supabase URL is read from .env, same as the app.
 
 Panels are never regenerated: this uploads what the run already produced. The
 only cost is composing the video, about $0.012 per anecdote.
 `);
 }
 
-function supabaseConfig() {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+/**
+ * Resolved once and cached: the URL comes from the project's .env like the app
+ * itself, so the only thing left to provide is the service role key.
+ */
+let cachedConfig: { url: string; key: string } | null = null;
+
+async function supabaseConfig() {
+  if (cachedConfig) return cachedConfig;
+
+  const url = await resolveEnv("SUPABASE_URL", "VITE_SUPABASE_URL");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
+
+  if (!url) throw new Error("URL Supabase introuvable — attendue dans .env (VITE_SUPABASE_URL).");
+  if (!key) {
     throw new Error(
-      "SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont requis.\n" +
-        "La clé publique ne suffit pas : ce script écrit dans les posts."
+      "SUPABASE_SERVICE_ROLE_KEY manquante.\n" +
+        "La clé publique ne suffit pas : ce script écrit dans des posts.\n" +
+        "Tableau de bord Supabase → Project Settings → API → service_role."
     );
   }
-  return { url: url.replace(/\/$/, ""), key };
+
+  cachedConfig = { url: url.replace(/\/$/, ""), key };
+  return cachedConfig;
 }
 
 async function rest(path: string, init: RequestInit = {}) {
-  const { url, key } = supabaseConfig();
+  const { url, key } = await supabaseConfig();
   const res = await fetch(`${url}/rest/v1/${path}`, {
     ...init,
     headers: {
@@ -97,7 +115,7 @@ async function rest(path: string, init: RequestInit = {}) {
 }
 
 async function uploadToBucket(bucket: string, path: string, body: Uint8Array, contentType: string) {
-  const { url, key } = supabaseConfig();
+  const { url, key } = await supabaseConfig();
   const res = await fetch(`${url}/storage/v1/object/${bucket}/${path}`, {
     method: "POST",
     headers: {

@@ -17,6 +17,7 @@
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { assembleVideo, findFont, hasFfmpeg, type VideoPanel } from "./lib/assembleVideo.js";
 import { captionsFromSegments } from "../src/lib/captions.js";
+import { resolveEnv } from "./lib/env.js";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -209,29 +210,12 @@ async function loadFixtures(limit: number): Promise<Anecdote[]> {
  * Environment variables win over the committed .env so CI can point elsewhere.
  */
 async function supabaseConfig(): Promise<{ url: string; key: string }> {
-  let url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "";
-  let key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.SUPABASE_ANON_KEY ??
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
-    "";
-
-  if (!url || !key) {
-    try {
-      const env = await readFile(join(ROOT, ".env"), "utf8");
-      for (const line of env.split("\n")) {
-        if (line.trim().startsWith("#")) continue;
-        const [name, ...rest] = line.split("=");
-        // Values are commonly quoted in a .env; the quotes are not part of them.
-        const value = rest.join("=").trim().replace(/^['"]|['"]$/g, "");
-        if (!value) continue;
-        if (!url && name.trim() === "VITE_SUPABASE_URL") url = value;
-        if (!key && name.trim() === "VITE_SUPABASE_PUBLISHABLE_KEY") key = value;
-      }
-    } catch {
-      /* no .env; the error below explains what to provide */
-    }
-  }
+  const url = await resolveEnv("SUPABASE_URL", "VITE_SUPABASE_URL");
+  const key = await resolveEnv(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_ANON_KEY",
+    "VITE_SUPABASE_PUBLISHABLE_KEY"
+  );
 
   if (!url || !key) {
     throw new Error(
