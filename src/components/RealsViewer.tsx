@@ -557,12 +557,14 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
   // not a movement the reader should watch.
   const jumpedRef = useRef(false);
   useEffect(() => {
-    if (!startPostId || jumpedRef.current || allPosts.length === 0) return;
+    if (!startPostId || jumpedRef.current) return;
 
     if (!posts.some((p) => p.id === startPostId)) {
-      // Absent from the whole feed (a group anecdote, a blocked author) — stop
-      // trying, and leave the reader at the top rather than on a blank screen.
-      if (!revealPost(startPostId)) jumpedRef.current = true;
+      // Only "absent" ends the attempt. The visible posts are seeded from the
+      // cache, so they are non-empty long before the fetch lands, and treating
+      // that moment as "not in this feed" is what dropped the reader back at
+      // the top of the feed instead of on the anecdote they tapped.
+      if (revealPost(startPostId) === "absent") jumpedRef.current = true;
       return;
     }
 

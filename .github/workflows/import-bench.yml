@@ -39,6 +39,10 @@ on:
         description: "Titres à importer, séparés par des points-virgules. Vide = tout le run."
         required: false
         default: ""
+      as_user:
+        description: "Contrôle seulement : rejouer le feed pour ce pseudo (ex. yoman33)."
+        required: false
+        default: ""
 
 jobs:
   import:
@@ -149,10 +153,14 @@ jobs:
         if: ${{ startsWith(inputs.action, 'vérifier') }}
         env:
           IN_TITLES: ${{ inputs.titles }}
+          IN_AS_USER: ${{ inputs.as_user }}
         run: |
           ARGS=()
           if [ -n "$IN_TITLES" ]; then
             ARGS+=(--titles "$IN_TITLES")
+          fi
+          if [ -n "$IN_AS_USER" ]; then
+            ARGS+=(--as-user "$IN_AS_USER")
           fi
           npx tsx scripts/check-import.ts "${ARGS[@]}"
 
