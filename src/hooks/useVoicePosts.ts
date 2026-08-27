@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { orderFeed, isIllustrated } from "@/lib/feedOrder";
+import { orderFeed, isIllustrated, countToReveal } from "@/lib/feedOrder";
 import { parseSegments, type TimedSegment } from "@/lib/captions";
 
 export interface VoicePostWithAuthor {
@@ -196,6 +196,28 @@ export const useVoicePosts = () => {
     });
   };
 
+  /**
+   * Makes sure one particular anecdote is among the visible posts.
+   *
+   * Opening the feed at a post chosen elsewhere — a tile in Explore — only
+   * works if that post is rendered, and the feed reveals five at a time. This
+   * extends the visible slice just far enough to include it, in one step
+   * rather than by calling loadMore in a loop and re-rendering each time.
+   *
+   * Returns whether the post is in the feed at all: a group anecdote, or one
+   * from a blocked author, legitimately is not.
+   */
+  const revealPost = (postId: string): boolean => {
+    const full = fullListRef.current;
+    if (countToReveal(full, 0, postId) === null) return false;
+
+    setPosts((prev) => {
+      const needed = countToReveal(full, prev.length, postId);
+      return needed === null || needed === prev.length ? prev : full.slice(0, needed);
+    });
+    return true;
+  };
+
   useEffect(() => {
     fetchPosts();
 
@@ -215,5 +237,5 @@ export const useVoicePosts = () => {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
-  return { posts, loading, refetch: fetchPosts, loadMore, allFetched };
+  return { posts, loading, refetch: fetchPosts, loadMore, allFetched, revealPost };
 };

@@ -20,6 +20,27 @@ export interface FeedCandidate {
   video_url?: string | null;
 }
 
+/**
+ * How many posts must be visible for `postId` to be rendered.
+ *
+ * The feed reveals five at a time, so opening it on an anecdote chosen
+ * elsewhere means widening that slice — but only ever widening it: shrinking
+ * the list under a reader who has already scrolled would yank the page.
+ *
+ * Returns the current count unchanged when the post is already visible, and
+ * null when it is not in the feed at all — a group anecdote, or one from a
+ * blocked author, legitimately is not.
+ */
+export function countToReveal(
+  full: readonly { id: string }[],
+  visible: number,
+  postId: string
+): number | null {
+  const at = full.findIndex((p) => p.id === postId);
+  if (at < 0) return null;
+  return Math.max(visible, at + 1);
+}
+
 /** Fisher–Yates. Injectable so tests can make the order deterministic. */
 export function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];

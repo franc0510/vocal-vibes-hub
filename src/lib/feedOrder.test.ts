@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { orderFeed, isIllustrated, type FeedCandidate } from "./feedOrder";
+import { orderFeed, isIllustrated, countToReveal, type FeedCandidate } from "./feedOrder";
 
 /** No shuffling, so the ordering rules alone decide. */
 const stable = <T,>(a: T[]): T[] => [...a];
@@ -79,5 +79,32 @@ describe("orderFeed", () => {
 
   it("handles an empty feed", () => {
     expect(orderFeed([], new Set(), stable)).toEqual([]);
+  });
+});
+
+describe("countToReveal", () => {
+  const full = [post("a"), post("b"), post("c"), post("d"), post("e"), post("f")];
+
+  it("dit combien montrer pour atteindre une anecdote plus bas", () => {
+    // The feed shows five; the tapped tile is the sixth.
+    expect(countToReveal(full, 5, "f")).toBe(6);
+  });
+
+  it("ne réduit jamais la liste déjà visible", () => {
+    // Shrinking under a reader who has scrolled would yank the page.
+    expect(countToReveal(full, 6, "a")).toBe(6);
+  });
+
+  it("laisse le compte tel quel si l'anecdote est déjà visible", () => {
+    expect(countToReveal(full, 5, "c")).toBe(5);
+  });
+
+  it("rend null pour une anecdote absente du feed", () => {
+    // A group anecdote, or one from a blocked author.
+    expect(countToReveal(full, 5, "inconnue")).toBeNull();
+  });
+
+  it("rend null sur un feed vide plutôt que 0", () => {
+    expect(countToReveal([], 0, "a")).toBeNull();
   });
 });
