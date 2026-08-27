@@ -1,0 +1,150 @@
+name: Importer les vidéos du benchmark
+
+# Publie dans l'app les planches qu'un run du benchmark a déjà produites,
+# sans rien régénérer et sans terminal.
+#
+#   Actions → Importer les vidéos du benchmark → Run workflow
+#
+# L'artefact est récupéré directement depuis le run du benchmark : rien à
+# télécharger, rien à dézipper.
+#
+# Secrets requis (Settings → Secrets and variables → Actions) :
+#   FAL_KEY                     montage de la vidéo, et transcription
+#   SUPABASE_SERVICE_ROLE_KEY   écriture dans les posts — Supabase →
+#                               Project Settings → API → service_role
+#
+# L'URL Supabase vient du .env du dépôt, comme l'application.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Que faire"
+        required: true
+        default: voir ce qui serait importé (n'écrit rien)
+        type: choice
+        options:
+          - voir ce qui serait importé (n'écrit rien)
+          - importer pour de vrai
+      run_id:
+        description: "Numéro du run du benchmark à reprendre. Vide = le dernier réussi."
+        required: false
+        default: ""
+      model:
+        description: "Quel modèle importer, tel qu'il apparaît dans les noms de fichiers."
+        required: true
+        default: nano_banana
+      titles:
+        description: "Titres à importer, séparés par des points-virgules. Vide = tout le run."
+        required: false
+        default: ""
+
+jobs:
+  import:
+    name: Importer dans l'app
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      # Nécessaire pour lire l'artefact d'un AUTRE run que celui-ci.
+      actions: read
+      contents: read
+
+    env:
+      WRITE: ${{ inputs.action == 'importer pour de vrai' }}
+      FAL_KEY: ${{ secrets.FAL_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      # Échouer ici coûte quelques secondes ; échouer après le téléchargement
+      # de l'artefact en coûte plusieurs minutes.
+      - name: Vérifier les secrets
+        run: |
+          MISSING=()
+          [ -z "$FAL_KEY" ] && MISSING+=("FAL_KEY — montage de la vidéo et transcription")
+          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && MISSING+=("SUPABASE_SERVICE_ROLE_KEY — écriture dans les posts")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::error::Secrets manquants."
+            printf '  • %s\n' "${MISSING[@]}"
+            echo
+            echo "À créer dans Settings → Secrets and variables → Actions."
+            echo "La clé service_role est dans Supabase → Project Settings → API."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      # Sans numéro fourni, on reprend le dernier benchmark qui a réussi —
+      # c'est presque toujours celui qu'on veut.
+      - name: Trouver le run du benchmark
+        id: find
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIVEN: ${{ inputs.run_id }}
+        run: |
+          if [ -n "$GIVEN" ]; then
+            echo "run_id=$GIVEN" >> "$GITHUB_OUTPUT"
+            echo "Run demandé : $GIVEN"
+            exit 0
+          fi
+          RUN=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/bench-illustration.yml/runs?status=success&per_page=1" \
+            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          if [ -z "$RUN" ]; then
+            echo "::error::Aucun run réussi du benchmark. Lance-le d'abord, ou donne un numéro."
+            exit 1
+          fi
+          echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
+          echo "Dernier run réussi : $RUN"
+
+      - name: Récupérer les planches déjà générées
+        uses: actions/download-artifact@v4
+        with:
+          name: planche-contact
+          path: bench-output
+          run-id: ${{ steps.find.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Vérifier le contenu
+        run: |
+          if [ ! -f bench-output/results.csv ]; then
+            echo "::error::L'artefact ne contient pas results.csv — ce run n'a peut-être rien généré."
+            ls -R bench-output | head -20
+            exit 1
+          fi
+          echo "Planches disponibles : $(ls bench-output/images | wc -l)"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Importer
+        env:
+          IN_MODEL: ${{ inputs.model }}
+          IN_TITLES: ${{ inputs.titles }}
+        run: |
+          ARGS=(--dir ./bench-output --model "$IN_MODEL")
+          if [ -n "$IN_TITLES" ]; then
+            ARGS+=(--titles "$IN_TITLES")
+          fi
+          if [ "$WRITE" = "true" ]; then
+            ARGS+=(--yes)
+          fi
+          npx tsx scripts/import-bench-output.ts "${ARGS[@]}"
+
+      - name: Récapitulatif
+        if: always()
+        run: |
+          {
+            echo "## Import des vidéos"
+            echo
+            if [ "$WRITE" = "true" ]; then
+              echo "Les anecdotes importées sont en ligne et remontent en tête du feed."
+              echo "Ouvre l'app pour les voir — pense à la reconstruire si tu passes par Xcode."
+            else
+              echo "Rien n'a été écrit. Relance en choisissant **importer pour de vrai**."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
