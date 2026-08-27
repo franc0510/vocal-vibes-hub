@@ -96,6 +96,39 @@ async function auditSchema(url: string, key: string) {
   console.log("\n  Rejoue les migrations correspondantes dans le SQL Editor.");
 }
 
+/**
+ * Checks that select("*") really returns the illustration columns.
+ *
+ * The app asks for "*", not for named columns, and PostgREST answers "*" with
+ * only the columns the caller's role may read — silently. A column-level grant
+ * that stopped at the older columns would therefore hand the feed rows with no
+ * illustration_status and no video_url, which is exactly what "the videos are
+ * not first" looks like, while every explicit query here keeps succeeding.
+ */
+async function probeStar(url: string, key: string, label: string) {
+  const rows = (await query(url, key, "voice_posts?select=*&limit=1")) as Record<string, unknown>[];
+  if (rows.length === 0) {
+    console.log(`  ${label} : aucune ligne lisible.`);
+    return;
+  }
+  const got = new Set(Object.keys(rows[0]));
+  const needed = [
+    "illustration_status",
+    "illustration_cover_url",
+    "video_url",
+    "video_status",
+    "duration_ms",
+    "transcription_segments",
+  ];
+  const absent = needed.filter((c) => !got.has(c));
+  if (absent.length === 0) {
+    console.log(`  ${label} : select("*") renvoie bien les ${needed.length} colonnes.`);
+  } else {
+    console.log(`  ${label} : ⚠️ select("*") OMET ${absent.join(", ")}`);
+    console.log("     (droits par colonne : la ligne arrive sans, et sans erreur)");
+  }
+}
+
 /** Is the stored file actually served? A URL in the row proves nothing. */
 async function reachable(url: string): Promise<string> {
   try {
@@ -309,6 +342,9 @@ async function main() {
 
   // The ordering an account actually gets depends on its own blocks and
   // listening history, which the anonymous read above cannot see.
+  console.log("\n═══ Ce que select(\"*\") ramène, comme le fait le feed ═══");
+  await probeStar(url, anon, "clé publique");
+
   if (service) await auditSchema(url, service);
 
   if (asUser) {

@@ -38,6 +38,37 @@ export interface VoicePostWithAuthor {
 // video_url. That cache is what paints the first screen, which meant a phone
 // that had opened the app even once kept showing the pre-illustration order
 // until the network answered. Renaming the key retires those rows for good.
+/**
+ * The columns the feed needs, named rather than taken with "*".
+ *
+ * PostgREST answers "*" with only the columns the caller's role may read, and
+ * says nothing about the rest. A grant that stopped at the older columns would
+ * therefore deliver rows with no illustration_status and no video_url — every
+ * anecdote would look un-illustrated and the ordering would quietly do nothing.
+ * Naming them turns that into a visible error instead of a wrong feed.
+ */
+const FEED_COLUMNS = [
+  "id",
+  "user_id",
+  "title",
+  "audio_url",
+  "duration",
+  "duration_ms",
+  "likes_count",
+  "comments_count",
+  "shares_count",
+  "created_at",
+  "group_id",
+  "transcription",
+  "transcription_segments",
+  "image_url",
+  "location",
+  "illustration_status",
+  "illustration_cover_url",
+  "video_url",
+  "video_status",
+].join(",");
+
 const CACHE_KEY = "vocme_feed_cache_v2";
 const STALE_CACHE_KEYS = ["vocme_feed_cache_v1"];
 
@@ -94,7 +125,7 @@ export const useVoicePosts = () => {
 
     const { data: postsData, error } = await supabase
       .from("voice_posts")
-      .select("*, transcription, image_url, location")
+      .select(FEED_COLUMNS)
       .order("created_at", { ascending: false });
 
     if (error || !postsData) {
