@@ -4,6 +4,7 @@ import {
   fetchIllustrations,
   requestIllustration,
   type IllustrationPanel,
+  type IllustrationRequest,
   type IllustrationStatus,
 } from "@/services/illustrationService";
 
@@ -77,11 +78,11 @@ export function useIllustrations(postId: string | undefined, rawStatus?: string 
     };
   }, [postId, status, load]);
 
-  const illustrate = useCallback(async () => {
+  const illustrate = useCallback(async (request: IllustrationRequest = {}) => {
     if (!postId || requesting) return;
     setRequesting(true);
     try {
-      const next = await requestIllustration(postId);
+      const next = await requestIllustration(postId, request);
       if (mountedRef.current) setStatus(next);
       if (next === "ready") await load();
     } finally {

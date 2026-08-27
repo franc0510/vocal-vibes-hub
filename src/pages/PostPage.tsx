@@ -264,7 +264,10 @@ const PostPage = () => {
 
   const handleIllustrate = async () => {
     try {
-      await illustrate();
+      await illustrate({
+        audioUrl: post.audio_url,
+        hasTranscription: Boolean(post.transcription?.trim()),
+      });
       toast.success("On dessine ton anecdote… ça prend une minute ✨");
     } catch (err: any) {
       toast.error(err?.message || "Impossible d'illustrer cette anecdote");
@@ -422,7 +425,7 @@ const PostPage = () => {
           </div>
         )}
 
-        {isOwner && post.transcription && !hasSlideshow && (
+        {isOwner && !hasSlideshow && (
           <div className="mb-4">
             {illustrationStatus === "pending" ? (
               <div className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-card/50 backdrop-blur-sm border border-border/20">

@@ -18,10 +18,30 @@ export interface IllustrationPanel {
  * Returns as soon as the job is accepted — the panels arrive later, and the
  * caller should watch the post's illustration_status for the result.
  */
-export async function requestIllustration(voicePostId: string): Promise<IllustrationStatus> {
-  const { data, error } = await supabase.functions.invoke("illustrate-story", {
-    body: { voice_post_id: voicePostId },
-  });
+export interface IllustrationRequest {
+  /** Needed only when the anecdote has never been transcribed. */
+  audioUrl?: string;
+  hasTranscription?: boolean;
+}
+
+export async function requestIllustration(
+  voicePostId: string,
+  request: IllustrationRequest = {}
+): Promise<IllustrationStatus> {
+  // An anecdote published before transcription worked has no text to build a
+  // storyboard from. Transcribe first and let the server chain onwards, rather
+  // than refusing and leaving the user with a button that never does anything.
+  const functionName =
+    request.hasTranscription === false && request.audioUrl
+      ? "transcribe-audio"
+      : "illustrate-story";
+
+  const body =
+    functionName === "transcribe-audio"
+      ? { voice_post_id: voicePostId, audio_url: request.audioUrl, then_illustrate: true }
+      : { voice_post_id: voicePostId };
+
+  const { data, error } = await supabase.functions.invoke(functionName, { body });
 
   if (error) {
     // Edge Function errors carry the useful message in the response body:
@@ -37,7 +57,11 @@ export async function requestIllustration(voicePostId: string): Promise<Illustra
     throw new Error(message);
   }
 
-  return (data?.status as IllustrationStatus) ?? "pending";
+  // transcribe-audio answers about the transcription; the illustration it
+  // chains into is pending either way.
+  return functionName === "transcribe-audio"
+    ? "pending"
+    : ((data?.status as IllustrationStatus) ?? "pending");
 }
 
 export async function fetchIllustrations(voicePostId: string): Promise<IllustrationPanel[]> {
