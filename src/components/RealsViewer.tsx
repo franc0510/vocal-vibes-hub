@@ -527,7 +527,7 @@ interface RealsViewerProps {
 const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, filterAllGroups = false, startPostId }: RealsViewerProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { posts: allPosts, loading, refetch, loadMore, revealPost } = useVoicePosts();
+  const { posts: allPosts, loading, refetch, loadMore, revealPost, refreshError } = useVoicePosts();
   const { winnerPostId } = useWeeklyVocme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -770,6 +770,19 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
       {isRefreshing && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
+      {/* A refresh can fail while cached posts stay on screen. Saying so beats
+          letting the reader wonder why the feed looks stuck in the past. */}
+      {refreshError && posts.length > 0 && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-[90%]">
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-card/90 backdrop-blur border border-border/50 shadow-card text-xs text-muted-foreground"
+          >
+            <span>Feed peut-être daté — appuie pour réessayer</span>
+          </button>
         </div>
       )}
 

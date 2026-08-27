@@ -81,6 +81,10 @@ export const useVoicePosts = () => {
   const [posts, setPosts] = useState<VoicePostWithAuthor[]>(() => readCache());
   const [loading, setLoading] = useState(() => readCache().length === 0);
   const [allFetched, setAllFetched] = useState(false);
+  // A refresh that fails leaves the cached posts on screen. Without this the
+  // feed looks merely out of date, and nobody — user or developer — learns
+  // that the fetch is failing at all.
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   // Keep the full ordered list internally; only expose chunks progressively
   const fullListRef = useRef<VoicePostWithAuthor[]>([]);
   const PAGE_SIZE = 5;
@@ -94,9 +98,16 @@ export const useVoicePosts = () => {
       .order("created_at", { ascending: false });
 
     if (error || !postsData) {
+      // Was a silent early return. On a device still holding a cache, that
+      // meant the old order stayed on screen indefinitely with no clue why —
+      // and fullListRef stayed empty, so nothing could jump to a chosen post.
+      const why = error?.message ?? "réponse vide";
+      console.error(`Feed non rafraîchi : ${why}`);
+      setRefreshError(why);
       setLoading(false);
       return;
     }
+    setRefreshError(null);
 
     // Get unique user ids
     const userIds = [...new Set(postsData.map((p) => p.user_id))];
@@ -251,5 +262,5 @@ export const useVoicePosts = () => {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
-  return { posts, loading, refetch: fetchPosts, loadMore, allFetched, revealPost };
+  return { posts, loading, refetch: fetchPosts, loadMore, allFetched, revealPost, refreshError };
 };
