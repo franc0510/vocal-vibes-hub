@@ -143,7 +143,24 @@ q "INSERT INTO public.illustration_credits (user_id, credits) VALUES ('$INTRUDER
   && check "solde négatif rejeté" "rejeté" "accepté" \
   || check "solde négatif rejeté" "rejeté" "rejeté"
 
+# listened_posts était absente de la base de production alors qu'une migration
+# la crée : rien ici ne la regardait, donc la dérive est passée inaperçue et
+# « les non écoutées d'abord » ne jouait pour personne, en silence.
+echo "▸ Écoutes"
+check "sa propre écoute est acceptée" "1" \
+  "$(as authenticated "$INTRUDER" "INSERT INTO listened_posts (user_id, post_id) VALUES ('$INTRUDER','$POST') RETURNING 1;" 2>/dev/null)"
+
+as authenticated "$INTRUDER" "INSERT INTO listened_posts (user_id, post_id) VALUES ('$OWNER','$POST');" >/dev/null 2>&1 \
+  && check "écrire l'écoute d'autrui bloqué" "rejeté" "accepté" \
+  || check "écrire l'écoute d'autrui bloqué" "rejeté" "rejeté"
+
+check "chacun ne lit que les siennes" "0" \
+  "$(as authenticated "$OWNER" "SELECT count(*) FROM listened_posts;" 2>/dev/null)"
+
 q "DELETE FROM voice_posts WHERE id='$POST'" >/dev/null
+
+check "écoutes supprimées avec l'anecdote" "0" \
+  "$(q "SELECT count(*) FROM listened_posts WHERE post_id='$POST'")"
 
 echo
 if [ "$failures" -eq 0 ]; then
