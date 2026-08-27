@@ -556,6 +556,7 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
   // jump to it. `auto` rather than `smooth`: this is where the screen starts,
   // not a movement the reader should watch.
   const jumpedRef = useRef(false);
+  const [startMissing, setStartMissing] = useState(false);
   useEffect(() => {
     if (!startPostId || jumpedRef.current) return;
 
@@ -564,7 +565,12 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
       // cache, so they are non-empty long before the fetch lands, and treating
       // that moment as "not in this feed" is what dropped the reader back at
       // the top of the feed instead of on the anecdote they tapped.
-      if (revealPost(startPostId) === "absent") jumpedRef.current = true;
+      if (revealPost(startPostId) === "absent") {
+        // Genuinely not in this feed — a blocked author, or a group anecdote.
+        // Landing at the top without a word looks like the tap misfired.
+        jumpedRef.current = true;
+        setStartMissing(true);
+      }
       return;
     }
 
@@ -770,6 +776,14 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
       {isRefreshing && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
+      {startMissing && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 max-w-[88%]">
+          <div className="px-3 py-2 rounded-xl bg-card/95 backdrop-blur border border-border/50 shadow-card text-xs text-muted-foreground text-center">
+            Cette anecdote n'est pas dans ton feed — son auteur est bloqué.
+          </div>
         </div>
       )}
 
