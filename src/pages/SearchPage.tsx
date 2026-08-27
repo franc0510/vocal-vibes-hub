@@ -254,7 +254,7 @@ const SearchPage = () => {
           ) : (
             <div className="grid grid-cols-3 gap-1.5">
               {explorePosts.map((post) => (
-                <ExploreTile key={post.id} post={post} onSelect={() => navigate(`/post/${post.id}`)} />
+                <ExploreTile key={post.id} post={post} onSelect={() => navigate(`/vocme/${post.id}`)} />
               ))}
             </div>
           )}

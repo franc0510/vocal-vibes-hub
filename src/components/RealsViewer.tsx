@@ -319,13 +319,19 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
           segments={post.transcription_segments}
           className="z-0"
           overlay={
-            <div className={`absolute inset-0 ${isWinner ? "bg-gradient-to-b from-amber-500/20 via-background/60 to-background/90" : "bg-gradient-to-b from-background/40 via-background/60 to-background/90"}`} />
+            // The scrim keeps the dark text legible; it must not erase the
+            // panel underneath. The theme is light (--background is 98%
+            // lightness and nothing ever sets the `dark` class), so these
+            // stops paint WHITE — at the old 40/60/90 the illustration was
+            // covered by a near-opaque white wash. Weight it to the bottom,
+            // where the title and transcription actually sit.
+            <div className={`absolute inset-0 ${isWinner ? "bg-gradient-to-b from-amber-500/20 via-background/25 to-background/90" : "bg-gradient-to-b from-background/5 via-background/25 to-background/90"}`} />
           }
         />
       ) : backgroundUrl ? (
         <div className="absolute inset-0 z-0">
           <img src={backgroundUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className={`absolute inset-0 ${isWinner ? "bg-gradient-to-b from-amber-500/20 via-background/60 to-background/90" : "bg-gradient-to-b from-background/40 via-background/60 to-background/90"}`} />
+          <div className={`absolute inset-0 ${isWinner ? "bg-gradient-to-b from-amber-500/20 via-background/35 to-background/90" : "bg-gradient-to-b from-background/15 via-background/35 to-background/90"}`} />
         </div>
       ) : (
         <div className="absolute inset-0 z-0">
@@ -514,12 +520,14 @@ interface RealsViewerProps {
   friendIds?: string[];
   filterGroupId?: string;
   filterAllGroups?: boolean;
+  /** Open straight onto this anecdote instead of the top of the feed. */
+  startPostId?: string;
 }
 
-const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, filterAllGroups = false }: RealsViewerProps) => {
+const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, filterAllGroups = false, startPostId }: RealsViewerProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { posts: allPosts, loading, refetch, loadMore } = useVoicePosts();
+  const { posts: allPosts, loading, refetch, loadMore, revealPost } = useVoicePosts();
   const { winnerPostId } = useWeeklyVocme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -541,6 +549,29 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
     : filterFriends
     ? allPosts.filter((p) => friendIds.includes(p.user_id))
     : allPosts.filter((p) => !(p as any).group_id); // "For you" hides group-only posts
+
+  // Opening on a chosen anecdote — a tile tapped in Explore — happens in two
+  // beats, because the feed reveals five posts at a time and the target may
+  // sit deeper: first ask the hook to include it, then, once it is rendered,
+  // jump to it. `auto` rather than `smooth`: this is where the screen starts,
+  // not a movement the reader should watch.
+  const jumpedRef = useRef(false);
+  useEffect(() => {
+    if (!startPostId || jumpedRef.current || allPosts.length === 0) return;
+
+    if (!posts.some((p) => p.id === startPostId)) {
+      // Absent from the whole feed (a group anecdote, a blocked author) — stop
+      // trying, and leave the reader at the top rather than on a blank screen.
+      if (!revealPost(startPostId)) jumpedRef.current = true;
+      return;
+    }
+
+    const el = itemRefs.current.get(startPostId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "auto", block: "start" });
+    setCurrentIndex(posts.findIndex((p) => p.id === startPostId));
+    jumpedRef.current = true;
+  }, [startPostId, allPosts, posts, revealPost]);
 
   // Preload next (and prev) posts whenever currentIndex changes
   useEffect(() => {

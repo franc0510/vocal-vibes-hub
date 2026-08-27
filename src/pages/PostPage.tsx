@@ -294,14 +294,14 @@ const PostPage = () => {
             isPlaying={playing}
             segments={parseSegments(post.transcription_segments)}
             overlay={
-              <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background/95" />
+              <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-background/30 to-background/95" />
             }
           />
         </div>
       ) : backgroundUrl ? (
         <div className="fixed inset-0 z-0 pointer-events-none">
           <img src={backgroundUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background/95" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-background/30 to-background/95" />
         </div>
       ) : null}
 
