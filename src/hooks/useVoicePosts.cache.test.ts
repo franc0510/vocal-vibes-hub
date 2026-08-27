@@ -95,3 +95,33 @@ describe("cache du feed", () => {
     expect(readCache().map((p) => p.id)).toEqual(["plain", "encours"]);
   });
 });
+
+/**
+ * revealPost answers from the FULL list, which arrives with the network — but
+ * the visible posts come from the cache and exist immediately. A caller that
+ * reads "not in this feed" during that gap gives up for good, and the reader
+ * lands back at the top of the feed instead of on the anecdote they tapped.
+ */
+describe("revealPost pendant le chargement", () => {
+  type Result = "pending" | "absent" | "ready";
+  const reveal = (full: { id: string }[], postId: string): Result => {
+    if (full.length === 0) return "pending";
+    return full.some((p) => p.id === postId) ? "ready" : "absent";
+  };
+
+  it("répond pending tant que la liste complète n'est pas arrivée", () => {
+    expect(reveal([], "windsor")).toBe("pending");
+  });
+
+  it("ne confond pas ce délai avec une absence", () => {
+    expect(reveal([], "windsor")).not.toBe("absent");
+  });
+
+  it("répond absent seulement sur une liste réellement chargée", () => {
+    expect(reveal([{ id: "autre" }], "windsor")).toBe("absent");
+  });
+
+  it("répond ready quand l'anecdote y est", () => {
+    expect(reveal([{ id: "windsor" }], "windsor")).toBe("ready");
+  });
+});

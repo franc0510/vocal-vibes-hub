@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { orderFeed, isIllustrated, countToReveal } from "@/lib/feedOrder";
@@ -67,6 +67,13 @@ const writeCache = (posts: VoicePostWithAuthor[]) => {
     /* ignore quota errors */
   }
 };
+
+/**
+ * What revealPost could conclude. "pending" is the one that matters: the feed
+ * paints from cache before the network answers, so "I cannot tell yet" has to
+ * be distinguishable from "not in this feed".
+ */
+export type RevealResult = "pending" | "absent" | "ready";
 
 export const useVoicePosts = () => {
   const { user } = useAuth();
@@ -204,19 +211,26 @@ export const useVoicePosts = () => {
    * extends the visible slice just far enough to include it, in one step
    * rather than by calling loadMore in a loop and re-rendering each time.
    *
-   * Returns whether the post is in the feed at all: a group anecdote, or one
-   * from a blocked author, legitimately is not.
+   * Answers "pending" while the full list is still being fetched, "absent"
+   * for a post this feed genuinely does not carry — a group anecdote, or one
+   * from a blocked author — and "ready" once it is visible.
    */
-  const revealPost = (postId: string): boolean => {
+  const revealPost = useCallback((postId: string): RevealResult => {
     const full = fullListRef.current;
-    if (countToReveal(full, 0, postId) === null) return false;
+
+    // The visible posts are seeded from the cache, so they exist well before
+    // the fetch lands — but the full list does not. Answering "absent" here
+    // would be a guess, and a caller that gives up on it never recovers.
+    if (full.length === 0) return "pending";
+
+    if (countToReveal(full, 0, postId) === null) return "absent";
 
     setPosts((prev) => {
       const needed = countToReveal(full, prev.length, postId);
       return needed === null || needed === prev.length ? prev : full.slice(0, needed);
     });
-    return true;
-  };
+    return "ready";
+  }, []);
 
   useEffect(() => {
     fetchPosts();

@@ -15,7 +15,7 @@
  */
 
 import { resolveEnv } from "./lib/env.js";
-import { isIllustrated } from "../src/lib/feedOrder.js";
+import { isIllustrated, orderFeed } from "../src/lib/feedOrder.js";
 
 interface PostRow {
   id: string;
@@ -56,10 +56,76 @@ async function reachable(url: string): Promise<string> {
   }
 }
 
+/**
+ * Replays the feed exactly as the app builds it, for one real account.
+ *
+ * "It is not first in my feed" cannot be settled by reading the ordering code:
+ * the order depends on that account's blocks and listening history, which an
+ * anonymous query cannot see. So this rebuilds the list the same way the hook
+ * does — same filters, same orderFeed — and prints the head of it.
+ */
+async function replayFeed(url: string, service: string, username: string) {
+  const profiles = (await query(
+    url,
+    service,
+    `profiles?select=id,username,display_name&username=eq.${encodeURIComponent(username)}`
+  )) as { id: string; username: string; display_name: string }[];
+
+  if (profiles.length === 0) {
+    console.log(`\n❌ Aucun compte nommé « ${username} ».\n`);
+    return;
+  }
+  const me = profiles[0];
+  console.log(`\n═══ Feed reconstitué pour ${me.display_name} (@${me.username}) ═══`);
+
+  const [posts, blocks, listened] = (await Promise.all([
+    query(url, service, `voice_posts?select=id,title,group_id,user_id,likes_count,comments_count,illustration_status,video_url&limit=1000`),
+    query(url, service, `blocks?select=blocked_user_id&user_id=eq.${me.id}`),
+    query(url, service, `listened_posts?select=post_id&user_id=eq.${me.id}`),
+  ])) as [
+    (FeedRow & { group_id: string | null; user_id: string })[],
+    { blocked_user_id: string }[],
+    { post_id: string }[],
+  ];
+
+  const blocked = new Set(blocks.map((b) => b.blocked_user_id));
+  const heard = new Set(listened.map((l) => l.post_id));
+  console.log(`  auteurs bloqués : ${blocked.size}   anecdotes déjà écoutées : ${heard.size}`);
+
+  // The same two filters the app applies, in the same order.
+  const visible = posts.filter((p) => !blocked.has(p.user_id));
+  const forYou = visible.filter((p) => !p.group_id); // "Pour toi" masque les groupes
+  console.log(`  ${posts.length} au total → ${visible.length} non bloquées → ${forYou.length} dans « Pour toi »`);
+
+  // Ordering without the shuffle, so the partition is what shows.
+  const ordered = orderFeed(forYou, heard, (a) => [...a]);
+  console.log("\n  Les 6 premières que l'app afficherait :");
+  ordered.slice(0, 6).forEach((p, i) => {
+    const mark = isIllustrated(p) ? "🎬" : "  ";
+    console.log(`   ${i + 1}. ${mark} ${(p as FeedRow & { title: string }).title}`);
+  });
+
+  const missing = posts.filter(isIllustrated).filter((p) => !forYou.some((v) => v.id === p.id));
+  for (const p of missing) {
+    const why = blocked.has(p.user_id) ? "auteur bloqué" : "anecdote de groupe";
+    console.log(`\n  ⚠️  « ${(p as FeedRow & { title: string }).title} » est illustrée mais absente du feed : ${why}.`);
+  }
+}
+
+interface FeedRow {
+  id: string;
+  likes_count: number;
+  comments_count: number;
+  illustration_status?: string | null;
+  video_url?: string | null;
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const i = argv.indexOf("--titles");
   const titles = i >= 0 && argv[i + 1] ? argv[i + 1].split(";").map((s) => s.trim()) : null;
+  const u = argv.indexOf("--as-user");
+  const asUser = u >= 0 && argv[u + 1] ? argv[u + 1] : null;
 
   const url = (await resolveEnv("SUPABASE_URL", "VITE_SUPABASE_URL"))?.replace(/\/$/, "");
   const anon = await resolveEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY");
@@ -128,6 +194,13 @@ async function main() {
     `\nRécapitulatif : ${leaders.length} anecdote(s) passeraient devant les ` +
       `${asApp.length - leaders.length} autres.`
   );
+
+  // The ordering an account actually gets depends on its own blocks and
+  // listening history, which the anonymous read above cannot see.
+  if (asUser) {
+    if (!service) console.log("\n(--as-user demande SUPABASE_SERVICE_ROLE_KEY.)");
+    else await replayFeed(url, service, asUser.replace(/^@/, ""));
+  }
   console.log(
     "Si tout est vert ici mais que l'app ne montre rien, c'est le bundle iOS :\n" +
       "  npm run ios:build   (lancer depuis Xcode ne reconstruit PAS le web)\n"
