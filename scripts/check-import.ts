@@ -258,7 +258,18 @@ async function replayFeed(url: string, service: string, username: string) {
 
   const blocked = new Set(blocks.map((b) => b.blocked_user_id));
   const heard = new Set(listened.map((l) => l.post_id));
+
+  // Named, not counted: "an author is blocked" sent me naming the wrong person
+  // to unblock, and a count cannot be checked against what the user remembers.
+  const authors = (await query(
+    url,
+    service,
+    "profiles?select=id,display_name&limit=1000"
+  )) as { id: string; display_name: string | null }[];
+  const nameOf = new Map(authors.map((a) => [a.id, a.display_name ?? "sans nom"]));
+
   console.log(`  auteurs bloqués : ${blocked.size}   anecdotes déjà écoutées : ${heard.size}`);
+  for (const id of blocked) console.log(`     bloqué : ${nameOf.get(id) ?? id}`);
 
   // The same two filters the app applies, in the same order.
   const visible = posts.filter((p) => !blocked.has(p.user_id));
@@ -275,7 +286,8 @@ async function replayFeed(url: string, service: string, username: string) {
 
   const missing = posts.filter(isIllustrated).filter((p) => !forYou.some((v) => v.id === p.id));
   for (const p of missing) {
-    const why = blocked.has(p.user_id) ? "auteur bloqué" : "anecdote de groupe";
+    const author = nameOf.get(p.user_id) ?? p.user_id;
+    const why = blocked.has(p.user_id) ? `son auteur ${author} est bloqué` : "c'est une anecdote de groupe";
     console.log(`\n  ⚠️  « ${(p as FeedRow & { title: string }).title} » est illustrée mais absente du feed : ${why}.`);
   }
 }
