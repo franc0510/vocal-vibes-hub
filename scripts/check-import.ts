@@ -142,6 +142,38 @@ async function reachable(url: string): Promise<string> {
 }
 
 /**
+ * Every account, auth record and profile side by side.
+ *
+ * The profiles table has no usernames here, so a handle someone uses for
+ * themselves may exist only as an email — and picking the wrong account means
+ * replaying the wrong feed, which is worse than replaying none.
+ */
+async function listAccounts(url: string, service: string) {
+  const res = await fetch(`${url}/auth/v1/admin/users?per_page=500`, {
+    headers: { apikey: service, Authorization: `Bearer ${service}` },
+  });
+  if (!res.ok) {
+    console.log("   (impossible de lister les comptes : " + (await res.text()) + ")");
+    return;
+  }
+  const { users } = (await res.json()) as {
+    users: { id: string; email?: string; created_at?: string }[];
+  };
+  const profiles = (await query(
+    url,
+    service,
+    "profiles?select=id,display_name&limit=1000"
+  )) as { id: string; display_name: string | null }[];
+  const names = new Map(profiles.map((p) => [p.id, p.display_name]));
+
+  console.log(`\n   ${users.length} compte(s) :`);
+  for (const u of users) {
+    console.log(`     ${(u.email ?? "sans e-mail").padEnd(34)} ${names.get(u.id) ?? "(pas de profil)"}`);
+  }
+  console.log("");
+}
+
+/**
  * Finds an account from its auth record, by email or by the part before the @.
  *
  * The profiles table carries no username in this project, so a handle someone
@@ -204,16 +236,7 @@ async function replayFeed(url: string, service: string, username: string) {
 
   if (profiles.length === 0) {
     console.log(`\n❌ Aucun compte ne correspond à « ${username} ».`);
-    const sample = (await query(
-      url,
-      service,
-      "profiles?select=username,display_name&limit=15"
-    )) as { username: string | null; display_name: string | null }[];
-    console.log("   Comptes existants, pour retrouver le bon :");
-    for (const p of sample) {
-      console.log(`     @${p.username ?? "—"}  (${p.display_name ?? "sans nom"})`);
-    }
-    console.log("");
+    await listAccounts(url, service);
     return;
   }
 
