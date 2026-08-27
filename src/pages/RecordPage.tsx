@@ -66,11 +66,10 @@ const RecordPage = () => {
   const [visibility, setVisibility] = useState<"public" | "friends" | "group">("public");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-  // New: photo, location, replay, transcription, confirm-delete
+  // New: photo, location, replay, confirm-delete
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [location, setLocation] = useState("");
-  const [transcription, setTranscription] = useState("");
   const [isReplaying, setIsReplaying] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -291,7 +290,6 @@ const RecordPage = () => {
         illustration_requested: wantVideo,
         image_url: imageUrl,
         location: location.trim() || null,
-        transcription: transcription.trim() || null,
         ...(visibility === "group" && selectedGroupId ? { group_id: selectedGroupId } : {}),
       } as any).select().single();
       if (insertError) throw insertError;
@@ -302,10 +300,13 @@ const RecordPage = () => {
           : "Published! 🎉"
       );
       setTitle(""); setAudioBlob(null); setElapsed(0); setWantVideo(false);
-      setImageFile(null); setImagePreview(null); setLocation(""); setTranscription("");
+      setImageFile(null); setImagePreview(null); setLocation("");
       
-      // Start automatic transcription in background (if no manual transcription provided)
-      if (!transcription.trim() && insertData?.id) {
+      // Always transcribe. It is what produces the timestamped segments the
+      // captions and panel timings need, and transcribe-audio is what chains
+      // into illustration afterwards — skipping it silently disabled the whole
+      // video feature.
+      if (insertData?.id) {
         console.log("🎤 Starting automatic transcription in background...");
         transcribeAudio(urlData.publicUrl, insertData.id).catch((err) => {
           console.error("⚠️ Automatic transcription failed:", err);
@@ -425,14 +426,6 @@ const RecordPage = () => {
             className="w-full bg-card border border-border/50 rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50 shadow-card"
           />
 
-          {/* Optional transcription / extra text */}
-          <textarea
-            value={transcription}
-            onChange={(e) => setTranscription(e.target.value)}
-            placeholder="Transcription (optional)…"
-            rows={1}
-            className="w-full bg-card border border-border/50 rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/50 shadow-card resize-none"
-          />
 
           {/* Photo background + location */}
           <div className="flex items-stretch gap-1.5">
