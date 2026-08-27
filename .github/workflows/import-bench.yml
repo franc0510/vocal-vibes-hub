@@ -26,6 +26,7 @@ on:
         options:
           - voir ce qui serait importé (n'écrit rien)
           - importer pour de vrai
+          - vérifier ce que voit l'app (n'écrit rien)
       run_id:
         description: "Numéro du run du benchmark à reprendre. Vide = le dernier réussi."
         required: false
@@ -52,6 +53,9 @@ jobs:
 
     env:
       WRITE: ${{ inputs.action == 'importer pour de vrai' }}
+      # startsWith plutôt qu'une égalité : le libellé contient des apostrophes,
+      # qu'il faudrait doubler dans une chaîne YAML. Autant ne pas s'y frotter.
+      CHECK: ${{ startsWith(inputs.action, 'vérifier') }}
       FAL_KEY: ${{ secrets.FAL_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
@@ -59,6 +63,7 @@ jobs:
       # Échouer ici coûte quelques secondes ; échouer après le téléchargement
       # de l'artefact en coûte plusieurs minutes.
       - name: Vérifier les secrets
+        if: ${{ !startsWith(inputs.action, 'vérifier') }}
         run: |
           MISSING=()
           [ -z "$FAL_KEY" ] && MISSING+=("FAL_KEY — montage de la vidéo et transcription")
@@ -78,6 +83,7 @@ jobs:
       # c'est presque toujours celui qu'on veut.
       - name: Trouver le run du benchmark
         id: find
+        if: ${{ !startsWith(inputs.action, 'vérifier') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIVEN: ${{ inputs.run_id }}
@@ -112,6 +118,7 @@ jobs:
           echo "Dernier run réussi : $RUN"
 
       - name: Récupérer les planches déjà générées
+        if: ${{ !startsWith(inputs.action, 'vérifier') }}
         uses: actions/download-artifact@v4
         with:
           name: planche-contact
@@ -120,6 +127,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Vérifier le contenu
+        if: ${{ !startsWith(inputs.action, 'vérifier') }}
         run: |
           if [ ! -f bench-output/results.csv ]; then
             echo "::error::L'artefact ne contient pas results.csv — ce run n'a peut-être rien généré."
@@ -135,7 +143,21 @@ jobs:
 
       - run: npm ci
 
+      # Lit la base avec la clé publique, celle de l'app, et rejoue les vraies
+      # conditions d'affichage. Aucune écriture, aucun coût.
+      - name: Vérifier ce que voit l'app
+        if: ${{ startsWith(inputs.action, 'vérifier') }}
+        env:
+          IN_TITLES: ${{ inputs.titles }}
+        run: |
+          ARGS=()
+          if [ -n "$IN_TITLES" ]; then
+            ARGS+=(--titles "$IN_TITLES")
+          fi
+          npx tsx scripts/check-import.ts "${ARGS[@]}"
+
       - name: Importer
+        if: ${{ !startsWith(inputs.action, 'vérifier') }}
         env:
           IN_MODEL: ${{ inputs.model }}
           IN_TITLES: ${{ inputs.titles }}
@@ -155,7 +177,11 @@ jobs:
           {
             echo "## Import des vidéos"
             echo
-            if [ "$WRITE" = "true" ]; then
+            if [ "$CHECK" = "true" ]; then
+              echo "Contrôle en lecture seule — voir le journal de l'étape **Vérifier ce que voit l'app**."
+              echo
+              echo "Si tout y est vert, l'app tourne sur un ancien bundle : \`npm run ios:build\`."
+            elif [ "$WRITE" = "true" ]; then
               echo "Les anecdotes importées sont en ligne et remontent en tête du feed."
               echo "Ouvre l'app pour les voir — pense à la reconstruire si tu passes par Xcode."
             else
