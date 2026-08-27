@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Search, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface UserResult {
   id: string;
@@ -76,6 +77,7 @@ const ExploreTile = ({ post, onSelect }: { post: ExplorePost; onSelect: () => vo
 };
 
 const SearchPage = () => {
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -97,6 +99,25 @@ const SearchPage = () => {
         .order("created_at", { ascending: false })
         .limit(60);
 
+      // Explore used to ignore blocks, so a blocked author's anecdotes still
+      // showed here — and tapping one opened a feed that legitimately cannot
+      // contain it. Blocking should mean the same thing everywhere.
+      // `blocks` is missing from the generated types, so the client is narrowed
+      // to just the shape this call needs rather than widened to `any`.
+      const db = supabase as unknown as {
+        from: (t: string) => {
+          select: (c: string) => {
+            eq: (c: string, v: string) => Promise<{ data: { blocked_user_id: string }[] | null }>;
+          };
+        };
+      };
+
+      let blocked = new Set<string>();
+      if (user) {
+        const { data } = await db.from("blocks").select("blocked_user_id").eq("user_id", user.id);
+        blocked = new Set((data ?? []).map((b) => b.blocked_user_id));
+      }
+
       if (!postsData || postsData.length === 0) {
         setExplorePosts([]);
         setExploreLoading(false);
@@ -107,7 +128,7 @@ const SearchPage = () => {
       // picture grid, so the anecdotes that actually have pictures lead it —
       // the same rule the feed follows. Shuffling still varies the order
       // inside each half from one visit to the next.
-      const shuffled = [...postsData].sort(() => Math.random() - 0.5);
+      const shuffled = [...postsData].filter((p) => !blocked.has(p.user_id)).sort(() => Math.random() - 0.5);
       const illustrated = (p: (typeof shuffled)[number]) =>
         Boolean((p as { illustration_cover_url?: string | null }).illustration_cover_url) ||
         Boolean((p as { video_url?: string | null }).video_url);
@@ -142,7 +163,7 @@ const SearchPage = () => {
       setExploreLoading(false);
     };
     loadExplore();
-  }, []);
+  }, [user?.id]);
 
   const search = async (q: string) => {
     setQuery(q);
