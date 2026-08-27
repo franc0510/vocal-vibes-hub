@@ -47,9 +47,29 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
-    const { audio_url, voice_post_id, language } = await req.json();
+    const { audio_url, voice_post_id, language, then_illustrate } = await req.json();
     if (!audio_url || !voice_post_id) {
       return json({ error: "Missing audio_url or voice_post_id" }, 400);
+    }
+
+    // Transcribing is cheap and harmless, so it stays open. Chaining into
+    // illustration is neither: it spends real money and consumes the owner's
+    // weekly allowance, so that path requires proving you are the owner.
+    if (then_illustrate) {
+      const token = (req.headers.get("Authorization") ?? "").replace("Bearer ", "").trim();
+      const { data: userData } = await supabase.auth.getUser(token);
+      const caller = userData?.user;
+      if (!caller) return json({ error: "Not signed in" }, 401);
+
+      const { data: owner } = await supabase
+        .from("voice_posts")
+        .select("user_id")
+        .eq("id", voice_post_id)
+        .single();
+
+      if (owner?.user_id !== caller.id) {
+        return json({ error: "You can only illustrate your own anecdotes" }, 403);
+      }
     }
 
     console.log(`🎤 Transcribing ${voice_post_id}`);
@@ -70,14 +90,17 @@ serve(async (req: Request) => {
 
     if (updateError) throw new Error(`Failed to update voice_post: ${updateError.message}`);
 
-    // The publish-time switch decides whether a video follows.
+    // Either the publish-time switch asked for a video, or this call did —
+    // the second case is how an anecdote published before transcription worked
+    // can still be illustrated, since it has no transcription to start from.
     const { data: post } = await supabase
       .from("voice_posts")
       .select("illustration_requested, illustration_status")
       .eq("id", voice_post_id)
       .single();
 
-    if (post?.illustration_requested && post.illustration_status === "none") {
+    const wanted = then_illustrate || post?.illustration_requested;
+    if (wanted && post?.illustration_status === "none") {
       await chainIntoIllustration(voice_post_id);
     }
 
