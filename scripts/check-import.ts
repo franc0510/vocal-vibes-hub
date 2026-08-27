@@ -14,6 +14,7 @@
  *   npx tsx scripts/check-import.ts --titles "windsor;pluie"
  */
 
+import { readFile, readdir } from "node:fs/promises";
 import { resolveEnv } from "./lib/env.js";
 import { isIllustrated, orderFeed } from "../src/lib/feedOrder.js";
 
@@ -35,13 +36,64 @@ const FIELDS =
   "id,title,duration,duration_ms,illustration_status,illustration_cover_url," +
   "video_url,video_status,transcription_segments,likes_count,comments_count";
 
-async function query(url: string, key: string, path: string) {
+/** PostgREST's code for a table its schema cache does not know. */
+const NO_SUCH_TABLE = "PGRST205";
+
+async function query(url: string, key: string, path: string, optional = false) {
   const res = await fetch(`${url}/rest/v1/${path}`, {
     headers: { apikey: key, Authorization: `Bearer ${key}` },
   });
   const body = await res.text();
-  if (!res.ok) throw new Error(`${res.status} ${body}`);
+
+  if (!res.ok) {
+    // The app swallows this case — a missing table comes back as {data: null}
+    // and the feed carries on with nothing. Mirroring that here keeps the
+    // replay faithful instead of stopping at the first gap.
+    if (optional && body.includes(NO_SUCH_TABLE)) {
+      console.log(`  ⚠️  ${path.split("?")[0]} n'existe pas dans cette base — traité comme vide.`);
+      return [];
+    }
+    throw new Error(`${res.status} ${body}`);
+  }
   return body.trim() === "" ? [] : JSON.parse(body);
+}
+
+/**
+ * Names every table the repo's migrations create that the live database does
+ * not have.
+ *
+ * listened_posts turned up missing while chasing a feed problem, even though a
+ * migration creates it — so the deployed schema has drifted from the repo, and
+ * a drift found by accident is one that was going to bite again.
+ */
+async function auditSchema(url: string, key: string) {
+  const dir = new URL("../supabase/migrations/", import.meta.url);
+  const files = (await readdir(dir)).filter((f) => f.endsWith(".sql"));
+
+  const expected = new Set<string>();
+  for (const f of files) {
+    const sql = await readFile(new URL(f, dir), "utf8");
+    for (const m of sql.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?public\.(\w+)/gi)) {
+      expected.add(m[1]);
+    }
+  }
+
+  const missing: string[] = [];
+  for (const table of [...expected].sort()) {
+    const res = await fetch(`${url}/rest/v1/${table}?select=*&limit=0`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+    });
+    if (!res.ok && (await res.text()).includes(NO_SUCH_TABLE)) missing.push(table);
+  }
+
+  console.log(`\n═══ Schéma : ${expected.size} tables attendues par les migrations ═══`);
+  if (missing.length === 0) {
+    console.log("  ✅ Toutes présentes.");
+    return;
+  }
+  console.log(`  ❌ ${missing.length} absente(s) de la base :`);
+  for (const t of missing) console.log(`     ${t}`);
+  console.log("\n  Rejoue les migrations correspondantes dans le SQL Editor.");
 }
 
 /** Is the stored file actually served? A URL in the row proves nothing. */
@@ -140,8 +192,8 @@ async function replayFeed(url: string, service: string, username: string) {
 
   const [posts, blocks, listened] = (await Promise.all([
     query(url, service, `voice_posts?select=id,title,group_id,user_id,likes_count,comments_count,illustration_status,video_url&limit=1000`),
-    query(url, service, `blocks?select=blocked_user_id&user_id=eq.${me.id}`),
-    query(url, service, `listened_posts?select=post_id&user_id=eq.${me.id}`),
+    query(url, service, `blocks?select=blocked_user_id&user_id=eq.${me.id}`, true),
+    query(url, service, `listened_posts?select=post_id&user_id=eq.${me.id}`, true),
   ])) as [
     (FeedRow & { group_id: string | null; user_id: string })[],
     { blocked_user_id: string }[],
@@ -257,6 +309,8 @@ async function main() {
 
   // The ordering an account actually gets depends on its own blocks and
   // listening history, which the anonymous read above cannot see.
+  if (service) await auditSchema(url, service);
+
   if (asUser) {
     if (!service) console.log("\n(--as-user demande SUPABASE_SERVICE_ROLE_KEY.)");
     else await replayFeed(url, service, asUser.replace(/^@/, ""));
