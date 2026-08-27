@@ -12,7 +12,7 @@
 
 import { readFile, readdir } from "node:fs/promises";
 import { resolveEnv } from "./lib/env.js";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const shimTarget = globalThis as typeof globalThis & {
@@ -126,6 +126,20 @@ function schemaError(body: string): Error | null {
   }
 }
 
+/**
+ * Reads a PostgREST response body.
+ *
+ * "Not 204" is not the same as "has a JSON body": PostgREST answers a bulk
+ * insert sent with `Prefer: return=minimal` with **201 and an empty body**,
+ * while the same preference on a PATCH gives 204. Parsing on the status alone
+ * turned a *successful* upsert of eleven panels into `Unexpected end of JSON
+ * input` — the write had gone through, only reading the reply failed.
+ */
+export function parseRestBody(status: number, body: string): unknown {
+  if (status === 204 || body.trim() === "") return null;
+  return JSON.parse(body);
+}
+
 async function rest(path: string, init: RequestInit = {}) {
   const { url, key } = await supabaseConfig();
   const res = await fetch(`${url}/rest/v1/${path}`, {
@@ -138,11 +152,11 @@ async function rest(path: string, init: RequestInit = {}) {
       ...(init.headers ?? {}),
     },
   });
+  const body = await res.text();
   if (!res.ok) {
-    const body = await res.text();
     throw schemaError(body) ?? new Error(`${path} → ${res.status} ${body}`);
   }
-  return res.status === 204 ? null : res.json();
+  return parseRestBody(res.status, body);
 }
 
 /**
@@ -372,7 +386,14 @@ async function main() {
   console.log("Terminé. Les anecdotes remontent en tête du feed.\n");
 }
 
-main().catch((err) => {
-  console.error(`\n${err instanceof Error ? err.message : String(err)}\n`);
-  process.exitCode = 1;
-});
+// Only when run as a command. Importing the module — which the tests do, to
+// exercise the response parsing — must not start an import.
+const runDirectly =
+  !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (runDirectly) {
+  main().catch((err) => {
+    console.error(`\n${err instanceof Error ? err.message : String(err)}\n`);
+    process.exitCode = 1;
+  });
+}
