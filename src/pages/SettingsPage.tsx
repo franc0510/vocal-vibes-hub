@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Loader2, Users, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, Users, AlertTriangle, Ban } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -157,17 +157,17 @@ const SettingsPage = () => {
           </button>
         </section>
 
-        {/* Diagnostic — what the feed actually received on this device. */}
+        {/* Blocking was reachable from three screens and reversible from none. */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Diagnostic</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Blocked</h2>
           <button
-            onClick={() => navigate("/diag")}
+            onClick={() => navigate("/settings/blocked")}
             className="w-full flex items-center gap-3 bg-card border border-border/50 rounded-xl px-4 py-3 text-left hover:bg-secondary/30 transition-colors"
           >
-            <Users size={18} className="text-primary" />
+            <Ban size={18} className="text-primary" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-foreground">État du feed</p>
-              <p className="text-xs text-muted-foreground">Ce que l'app a reçu, dans l'ordre</p>
+              <p className="text-sm font-medium text-foreground">Comptes bloqués</p>
+              <p className="text-xs text-muted-foreground">Voir qui est bloqué, et débloquer</p>
             </div>
           </button>
         </section>
