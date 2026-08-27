@@ -12,6 +12,7 @@ import SharePanel from "@/components/SharePanel";
 import LikesListModal from "@/components/LikesListModal";
 import StorySlideshow from "@/components/StorySlideshow";
 import { useIllustrations } from "@/hooks/useIllustrations";
+import { parseSegments } from "@/lib/captions";
 
 const generateWaveform = () => Array.from({ length: 32 }, () => 0.15 + Math.random() * 0.85);
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
@@ -259,8 +260,13 @@ const PostPage = () => {
   const backgroundUrl = post.image_url || author?.avatar_url;
 
   const isOwner = user?.id === post.user_id;
-  const hasSlideshow = panels.length > 0;
-  const currentMs = progress * (post.duration || 0) * 1000;
+  // Same test as the feed: an anecdote whose MP4 exists is watchable even
+  // before its panel rows are loaded, so video_url counts on its own.
+  const hasSlideshow = panels.length > 0 || Boolean(post.video_url);
+  // duration_ms is the measured length; `duration` is a whole-second counter
+  // and always a little short, which slid every panel out of step with the
+  // voice — the same shortfall that used to cut the closing words.
+  const currentMs = progress * (post.duration_ms ?? (post.duration || 0) * 1000);
 
   const handleIllustrate = async () => {
     try {
@@ -284,6 +290,9 @@ const PostPage = () => {
           <StorySlideshow
             panels={panels}
             currentMs={currentMs}
+            videoUrl={post.video_url}
+            isPlaying={playing}
+            segments={parseSegments(post.transcription_segments)}
             overlay={
               <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background/95" />
             }

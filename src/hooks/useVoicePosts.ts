@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { orderFeed } from "@/lib/feedOrder";
+import { orderFeed, isIllustrated } from "@/lib/feedOrder";
 import { parseSegments, type TimedSegment } from "@/lib/captions";
 
 export interface VoicePostWithAuthor {
@@ -33,14 +33,27 @@ export interface VoicePostWithAuthor {
   isLiked: boolean;
 }
 
-const CACHE_KEY = "vocme_feed_cache_v1";
+// v2: entries cached under v1 were written before anecdotes could be
+// illustrated, so every one of them carries illustration_status "none" and no
+// video_url. That cache is what paints the first screen, which meant a phone
+// that had opened the app even once kept showing the pre-illustration order
+// until the network answered. Renaming the key retires those rows for good.
+const CACHE_KEY = "vocme_feed_cache_v2";
+const STALE_CACHE_KEYS = ["vocme_feed_cache_v1"];
 
 const readCache = (): VoicePostWithAuthor[] => {
   try {
+    for (const old of STALE_CACHE_KEYS) localStorage.removeItem(old);
+
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const rows: VoicePostWithAuthor[] = Array.isArray(parsed) ? parsed : [];
+
+    // The cache decides what the first paint looks like, so it owes the same
+    // promise as the feed itself: illustrated anecdotes lead. Without this a
+    // stale ordering could bury them until the fetch lands.
+    return [...rows.filter(isIllustrated), ...rows.filter((p) => !isIllustrated(p))];
   } catch {
     return [];
   }
