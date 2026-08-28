@@ -97,6 +97,62 @@ async function auditSchema(url: string, key: string) {
 }
 
 /**
+ * Which storage buckets the migrations create, and whether the live project
+ * actually has them.
+ *
+ * A missing bucket is silent in the app: the upload fails, the URL is stored
+ * anyway or not at all, and the reader just sees something that will not play.
+ * The storage schema is not exposed over REST, so each bucket is asked for by
+ * name through the storage API instead.
+ */
+async function auditBuckets(url: string, key: string) {
+  const dir = new URL("../supabase/migrations/", import.meta.url);
+  const files = (await readdir(dir)).filter((f) => f.endsWith(".sql"));
+
+  const expected = new Set<string>();
+  for (const f of files) {
+    const sql = await readFile(new URL(f, dir), "utf8");
+    for (const m of sql.matchAll(/INSERT INTO storage\.buckets[^;]*?VALUES\s*\(\s*'(\w+)'/gi)) {
+      expected.add(m[1]);
+    }
+  }
+
+  console.log(`\n═══ Buckets : ${expected.size} attendus par les migrations ═══`);
+  for (const id of [...expected].sort()) {
+    const res = await fetch(`${url}/storage/v1/bucket/${id}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+    });
+    if (!res.ok) {
+      console.log(`  ❌ ${id} — absent (${res.status})`);
+      continue;
+    }
+    const bucket = (await res.json()) as { public?: boolean };
+    console.log(`  ${bucket.public ? "✅" : "⚠️ "} ${id}${bucket.public ? "" : " — PRIVÉ, donc illisible par l'app"}`);
+  }
+}
+
+/**
+ * Notifications actually recorded, by kind.
+ *
+ * The triggers that create them live in the database, and pg_catalog is not
+ * reachable from here — but a type that has never appeared is the same signal:
+ * either nobody triggered it, or its trigger is not installed.
+ */
+async function auditNotifications(url: string, key: string) {
+  const rows = (await query(url, key, "notifications?select=type&limit=5000")) as { type: string }[];
+  const byType = new Map<string, number>();
+  for (const r of rows) byType.set(r.type, (byType.get(r.type) ?? 0) + 1);
+
+  console.log(`\n═══ Notifications enregistrées : ${rows.length} ═══`);
+  for (const [type, n] of [...byType].sort((a, b) => b[1] - a[1])) {
+    console.log(`  ${String(n).padStart(4)}  ${type}`);
+  }
+  if (!byType.has("friend_post")) {
+    console.log("  ⚠️  aucune « friend_post » : personne suivi n'a publié, ou le trigger manque.");
+  }
+}
+
+/**
  * Checks that select("*") really returns the illustration columns.
  *
  * The app asks for "*", not for named columns, and PostgREST answers "*" with
@@ -380,7 +436,11 @@ async function main() {
   console.log("\n═══ Ce que select(\"*\") ramène, comme le fait le feed ═══");
   await probeStar(url, anon, "clé publique");
 
-  if (service) await auditSchema(url, service);
+  if (service) {
+    await auditSchema(url, service);
+    await auditBuckets(url, service);
+    await auditNotifications(url, service);
+  }
 
   if (asUser) {
     if (!service) console.log("\n(--as-user demande SUPABASE_SERVICE_ROLE_KEY.)");

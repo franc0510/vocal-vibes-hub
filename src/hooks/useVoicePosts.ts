@@ -274,6 +274,21 @@ export const useVoicePosts = () => {
     return "ready";
   }, []);
 
+  /**
+   * Reveals the whole list at once.
+   *
+   * The five-at-a-time paging suits an endless feed, but a filtered view — one
+   * author's anecdotes — would show only whichever of them happen to fall in
+   * the first five of the global order, and reveal the rest one scroll at a
+   * time. A profile is a finite, known set: show it.
+   */
+  const revealAll = useCallback(() => {
+    const full = fullListRef.current;
+    if (full.length === 0) return;
+    setPosts((prev) => (prev.length >= full.length ? prev : full));
+    setAllFetched(true);
+  }, []);
+
   useEffect(() => {
     fetchPosts();
 
@@ -293,5 +308,5 @@ export const useVoicePosts = () => {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
-  return { posts, loading, refetch: fetchPosts, loadMore, allFetched, revealPost, refreshError };
+  return { posts, loading, refetch: fetchPosts, loadMore, allFetched, revealPost, revealAll, refreshError };
 };

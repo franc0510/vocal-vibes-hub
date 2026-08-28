@@ -505,12 +505,14 @@ interface RealsViewerProps {
   filterAllGroups?: boolean;
   /** Open straight onto this anecdote instead of the top of the feed. */
   startPostId?: string;
+  /** Restrict the feed to one author — used when browsing from a profile. */
+  filterUserId?: string;
 }
 
-const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, filterAllGroups = false, startPostId }: RealsViewerProps) => {
+const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, filterAllGroups = false, startPostId, filterUserId }: RealsViewerProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { posts: allPosts, loading, refetch, loadMore, revealPost, refreshError } = useVoicePosts();
+  const { posts: allPosts, loading, refetch, loadMore, revealPost, revealAll, refreshError } = useVoicePosts();
   const { winnerPostId } = useWeeklyVocme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -525,7 +527,10 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  const posts = filterGroupId
+  const posts = filterUserId
+    // A profile shows that person's anecdotes, in the same order the feed uses.
+    ? allPosts.filter((p) => p.user_id === filterUserId && !p.group_id)
+    : filterGroupId
     ? allPosts.filter((p) => (p as any).group_id === filterGroupId)
     : filterAllGroups
     ? allPosts.filter((p) => !!(p as any).group_id)
@@ -538,6 +543,11 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
   // sit deeper: first ask the hook to include it, then, once it is rendered,
   // jump to it. `auto` rather than `smooth`: this is where the screen starts,
   // not a movement the reader should watch.
+  // A profile is a finite set — load it whole rather than five at a time.
+  useEffect(() => {
+    if (filterUserId) revealAll();
+  }, [filterUserId, allPosts.length, revealAll]);
+
   const jumpedRef = useRef(false);
   const [startMissing, setStartMissing] = useState(false);
   useEffect(() => {
