@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Heart, MessageCircle, Share2, Play, Pause, Gauge, MapPin, SkipBack, SkipForward, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Heart, MessageCircle, Share2, Play, Pause, Gauge, MapPin, Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { playExclusive, releaseAudio } from "@/lib/audioManager";
-import WaveformVisualizer from "@/components/WaveformVisualizer";
 import CommentsPanel from "@/components/CommentsPanel";
 import SharePanel from "@/components/SharePanel";
 import LikesListModal from "@/components/LikesListModal";
@@ -14,7 +13,6 @@ import StorySlideshow from "@/components/StorySlideshow";
 import { useIllustrations } from "@/hooks/useIllustrations";
 import { parseSegments } from "@/lib/captions";
 
-const generateWaveform = () => Array.from({ length: 32 }, () => 0.15 + Math.random() * 0.85);
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 const formatCount = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString());
 const formatTime = (dateStr: string) => {
@@ -48,7 +46,6 @@ const PostPage = () => {
   const animRef = useRef<number>(0);
   const seekBarRef = useRef<HTMLDivElement | null>(null);
   const isSeekingRef = useRef(false);
-  const waveform = useRef(generateWaveform()).current;
 
   const { panels, status: illustrationStatus, requesting, illustrate } = useIllustrations(
     postId,
@@ -191,20 +188,6 @@ const PostPage = () => {
     if (!isSeekingRef.current) return;
     e.stopPropagation();
     isSeekingRef.current = false;
-  };
-  const jumpToStart = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      setProgress(0);
-    }
-  };
-  const jumpToEnd = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const a = audioRef.current;
-    if (!a) return;
-    a.currentTime = Math.max(0, (a.duration || post?.duration || 0) - 0.3);
-    setProgress(1);
   };
 
   const toggleLike = async () => {
@@ -350,83 +333,73 @@ const PostPage = () => {
 
         <h1 className="text-xl font-bold font-display text-foreground mb-5">{post.title}</h1>
 
-        <motion.div
-          className="bg-card/70 backdrop-blur-md rounded-2xl p-5 border border-border/30 shadow-elevated mb-4"
-          whileTap={{ scale: 0.99 }}
-        >
+        {/*
+          One row instead of a card, for the same reason as the feed: the
+          illustration is the point, and a panel of controls in front of it is
+          the one thing guaranteed to hide it.
+        */}
+        <div className="flex items-center gap-2.5 mb-4">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePlay();
+            }}
+            aria-label={playing ? "Pause" : "Lecture"}
+            className="w-10 h-10 shrink-0 rounded-full gradient-red flex items-center justify-center shadow-red"
+          >
+            {playing ? (
+              <Pause size={17} className="text-primary-foreground" />
+            ) : (
+              <Play size={17} className="text-primary-foreground ml-0.5" />
+            )}
+          </button>
+
+          <span className="text-[10px] text-muted-foreground font-medium tabular-nums shrink-0">
+            {formatDuration(Math.round(progress * post.duration))}
+          </span>
+
+          {/* Thin bar, thick touch target. */}
           <div
             ref={seekBarRef}
             onPointerDown={handleSeekDown}
             onPointerMove={handleSeekMove}
             onPointerUp={handleSeekUp}
-            className="relative w-full py-2 cursor-pointer touch-none"
+            className="relative flex-1 py-3 cursor-pointer touch-none"
           >
-            <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
+            <div className="w-full h-1 bg-foreground/20 rounded-full overflow-hidden">
               <div
                 className="h-full gradient-red rounded-full"
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-primary border-2 border-background shadow-md pointer-events-none"
-              style={{ left: `calc(${progress * 100}% - 7px)` }}
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-primary border-2 border-background shadow-md pointer-events-none"
+              style={{ left: `calc(${progress * 100}% - 6px)` }}
             />
           </div>
-          <div className="flex items-center justify-between mb-3 px-0.5">
-            <span className="text-[10px] text-muted-foreground font-medium tabular-nums">
-              {formatDuration(Math.round(progress * post.duration))}
-            </span>
-            <span className="text-[10px] text-muted-foreground font-medium tabular-nums">
-              {formatDuration(post.duration)}
-            </span>
-          </div>
-          <div className="h-14 flex items-center justify-center cursor-pointer" onClick={togglePlay}>
-            <WaveformVisualizer bars={waveform} isPlaying={playing} size="lg" color="coral" />
-          </div>
-          <div className="flex items-center justify-between mt-4">
-            <button
-              onClick={jumpToStart}
-              className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <SkipBack size={15} />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                togglePlay();
-              }}
-              className="w-12 h-12 rounded-full gradient-red flex items-center justify-center shadow-red"
-            >
-              {playing ? (
-                <Pause size={20} className="text-primary-foreground" />
-              ) : (
-                <Play size={20} className="text-primary-foreground ml-0.5" />
-              )}
-            </button>
-            <button
-              onClick={jumpToEnd}
-              className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <SkipForward size={15} />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                cycleSpeed();
-              }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-full border transition-colors ${
-                speed > 1
-                  ? "bg-primary/20 border-primary/50 text-primary"
-                  : "bg-secondary border-border/30 text-muted-foreground"
-              }`}
-            >
-              <Gauge size={13} />
-              <span className="text-xs font-bold">{speed}x</span>
-            </button>
-          </div>
-        </motion.div>
 
-        {post.transcription && (
+          <span className="text-[10px] text-muted-foreground font-medium tabular-nums shrink-0">
+            {formatDuration(post.duration)}
+          </span>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              cycleSpeed();
+            }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${
+              speed > 1
+                ? "bg-primary/20 border-primary/50 text-primary"
+                : "bg-card/60 backdrop-blur-sm border-border/30 text-muted-foreground"
+            }`}
+          >
+            <Gauge size={12} />
+            <span className="text-[11px] font-bold">{speed}x</span>
+          </button>
+        </div>
+
+        {/* Hidden under a slideshow: the captions already say this, in step. */}
+        {post.transcription && !hasSlideshow && (
           <div className="bg-card/50 backdrop-blur-sm rounded-xl px-4 py-3 border border-border/20 mb-4">
             <p className="text-xs text-foreground/80 leading-relaxed italic">
               "{post.transcription}"
