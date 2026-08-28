@@ -1,8 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, MessageCircle, Share2, Play, Pause, Trash2, Flag, Gauge, MapPin, Crown, SkipBack, SkipForward, X, Ban } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, Pause, Trash2, Flag, Gauge, MapPin, Crown, X, Ban } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import WaveformVisualizer from "./WaveformVisualizer";
 import CommentsPanel from "./CommentsPanel";
 import SharePanel from "./SharePanel";
 import LikesListModal from "./LikesListModal";
@@ -15,9 +14,6 @@ import { toast } from "sonner";
 import defaultAvatarBg from "@/assets/default-avatar-bg.png";
 import StorySlideshow from "./StorySlideshow";
 import { useIllustrations } from "@/hooks/useIllustrations";
-
-const generateWaveform = (length: number): number[] =>
-  Array.from({ length }, () => 0.15 + Math.random() * 0.85);
 
 const formatCount = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString());
 
@@ -65,7 +61,6 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
   const animRef = useRef<number>(0);
   const seekBarRef = useRef<HTMLDivElement | null>(null);
   const isSeekingRef = useRef(false);
-  const waveform = useRef(generateWaveform(32)).current;
 
   // --- Seek / scrubbing (video-like navigation) ---
   const seekToClientX = (clientX: number) => {
@@ -93,19 +88,6 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
     if (!isSeekingRef.current) return;
     e.stopPropagation();
     isSeekingRef.current = false;
-  };
-  // Jump to start / end quickly
-  const jumpToStart = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (audioRef.current) { audioRef.current.currentTime = 0; setProgress(0); }
-  };
-  const jumpToEnd = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const audio = audioRef.current;
-    if (!audio) return;
-    const dur = audio.duration || post.duration || 0;
-    audio.currentTime = Math.max(0, dur - 0.3);
-    setProgress(1);
   };
 
   // Cycle playback speed: 1x -> 1.5x -> 2x -> 1x
@@ -354,99 +336,48 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
         </div>
       )}
 
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-20">
-        <div className="flex items-center gap-3 mb-3 cursor-pointer" onClick={onProfileClick}>
+      {/*
+        Everything the reader needs sits at the bottom edge: the story fills the
+        screen, and the controls stop competing with it. The old centred card
+        covered the middle of every panel — the very thing the illustration was
+        generated for.
+      */}
+      <div className="relative z-10 flex-1 flex flex-col justify-end px-4 pb-20 pr-20">
+        <button onClick={onProfileClick} className="flex items-center gap-2 mb-2 text-left">
           {avatarUrl ? (
-            <img src={avatarUrl} alt="" className={`w-12 h-12 rounded-full object-cover border-2 ${isWinner ? "border-amber-400" : "border-primary/30"}`} />
+            <img src={avatarUrl} alt="" className={`w-9 h-9 rounded-full object-cover border-2 ${isWinner ? "border-amber-400" : "border-primary/30"}`} />
           ) : (
-            <div className={`w-12 h-12 rounded-full gradient-red flex items-center justify-center text-sm font-bold text-primary-foreground border-2 ${isWinner ? "border-amber-400" : "border-primary/30"}`}>
+            <div className={`w-9 h-9 rounded-full gradient-red flex items-center justify-center text-xs font-bold text-primary-foreground border-2 ${isWinner ? "border-amber-400" : "border-primary/30"}`}>
               {post.author.avatar}
             </div>
           )}
           <div>
-            <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+            <p className="text-sm font-bold text-foreground flex items-center gap-1.5 drop-shadow">
               {post.author.name}
               {isWinner && <Crown size={14} className="text-amber-400 fill-amber-400" />}
             </p>
-            <p className="text-xs text-muted-foreground">{post.author.username} · {formatTime(post.created_at)}</p>
+            <p className="text-[11px] text-muted-foreground">{post.author.username} · {formatTime(post.created_at)}</p>
           </div>
+        </button>
+
+        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+          {isWinner && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/50 text-[10px] font-bold text-amber-300">
+              <Crown size={11} className="text-amber-400 fill-amber-400" />
+              VocMe of the Week
+            </span>
+          )}
+          {post.location && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-card/60 backdrop-blur-sm border border-border/20 text-[10px] text-foreground/80 font-medium">
+              <MapPin size={10} className="text-primary" />
+              {post.location}
+            </span>
+          )}
         </div>
 
-        {/* VocMe of the week badge */}
-        {isWinner && (
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/50 mb-3"
-          >
-            <Crown size={13} className="text-amber-400 fill-amber-400" />
-            <span className="text-[11px] font-bold text-amber-300">VocMe of the Week</span>
-          </motion.div>
-        )}
-
-        {/* Location badge */}
-        {post.location && (
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-card/50 backdrop-blur-sm border border-border/20 mb-3">
-            <MapPin size={11} className="text-primary" />
-            <span className="text-[11px] text-foreground/80 font-medium">{post.location}</span>
-          </div>
-        )}
-
-        <h3 className="text-xl font-bold font-display text-foreground text-center mb-6 max-w-[280px] leading-snug">
+        <h3 className="text-base font-bold font-display text-foreground leading-snug mb-3 drop-shadow">
           {post.title}
         </h3>
-
-        <motion.div
-          className="w-full max-w-[300px] bg-card/60 backdrop-blur-md rounded-2xl p-5 border border-border/30 shadow-elevated mb-4"
-          whileTap={{ scale: 0.99 }}
-        >
-          {/* Interactive seek bar (drag to scrub like a video) */}
-          <div
-            ref={seekBarRef}
-            onPointerDown={handleSeekDown}
-            onPointerMove={handleSeekMove}
-            onPointerUp={handleSeekUp}
-            className="relative w-full py-2 cursor-pointer touch-none"
-          >
-            <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full gradient-red rounded-full" style={{ width: `${progress * 100}%` }} />
-            </div>
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-primary border-2 border-background shadow-md pointer-events-none"
-              style={{ left: `calc(${progress * 100}% - 7px)` }}
-            />
-          </div>
-          {/* Time labels */}
-          <div className="flex items-center justify-between mb-3 px-0.5">
-            <span className="text-[10px] text-muted-foreground font-medium tabular-nums">{formatDuration(Math.round(progress * post.duration))}</span>
-            <span className="text-[10px] text-muted-foreground font-medium tabular-nums">{formatDuration(post.duration)}</span>
-          </div>
-          <div className="h-14 flex items-center justify-center cursor-pointer" onClick={togglePlay}>
-            <WaveformVisualizer bars={waveform} isPlaying={isPlaying} size="lg" color="coral" />
-          </div>
-          <div className="flex items-center justify-between mt-4">
-            {/* Jump to start */}
-            <button onClick={jumpToStart} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-              <SkipBack size={15} />
-            </button>
-            {/* Play / Pause */}
-            <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-12 h-12 rounded-full gradient-red flex items-center justify-center shadow-red">
-              {isPlaying ? <Pause size={20} className="text-primary-foreground" /> : <Play size={20} className="text-primary-foreground ml-0.5" />}
-            </button>
-            {/* Jump to end */}
-            <button onClick={jumpToEnd} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-              <SkipForward size={15} />
-            </button>
-            {/* Speed control */}
-            <button
-              onClick={(e) => { e.stopPropagation(); cycleSpeed(); }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-full border transition-colors ${speed > 1 ? "bg-primary/20 border-primary/50 text-primary" : "bg-secondary border-border/30 text-muted-foreground"}`}
-            >
-              <Gauge size={13} />
-              <span className="text-xs font-bold">{speed}x</span>
-            </button>
-          </div>
-        </motion.div>
 
         {/*
           Transcription. An illustrated anecdote already carries live captions,
@@ -463,10 +394,10 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               onClick={(e) => { e.stopPropagation(); setTranscriptOpen((v) => !v); }}
-              className="w-full max-w-[300px] bg-blue-500/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-blue-500/30 text-left"
+              className="w-full bg-blue-500/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-blue-500/30 text-left mb-3"
             >
               <div className="flex items-start gap-2">
-                <span className="text-blue-500 font-bold text-sm shrink-0">CC</span>
+                <span className="text-blue-500 font-bold text-xs shrink-0">CC</span>
                 <p className={`text-xs text-foreground/80 leading-relaxed ${transcriptOpen ? "" : "line-clamp-4"}`}>
                   {post.transcription}
                 </p>
@@ -474,6 +405,50 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
             </motion.button>
           )}
         </AnimatePresence>
+
+        {/* Transport: one row, thumb-height, no panel behind it. */}
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+            aria-label={isPlaying ? "Pause" : "Lecture"}
+            className="w-10 h-10 shrink-0 rounded-full gradient-red flex items-center justify-center shadow-red"
+          >
+            {isPlaying ? <Pause size={17} className="text-primary-foreground" /> : <Play size={17} className="text-primary-foreground ml-0.5" />}
+          </button>
+
+          <span className="text-[10px] text-muted-foreground font-medium tabular-nums shrink-0 drop-shadow">
+            {formatDuration(Math.round(progress * post.duration))}
+          </span>
+
+          {/* The bar is thin but its touch target is not: py-3 keeps scrubbing easy. */}
+          <div
+            ref={seekBarRef}
+            onPointerDown={handleSeekDown}
+            onPointerMove={handleSeekMove}
+            onPointerUp={handleSeekUp}
+            className="relative flex-1 py-3 cursor-pointer touch-none"
+          >
+            <div className="w-full h-1 bg-foreground/20 rounded-full overflow-hidden">
+              <div className="h-full gradient-red rounded-full" style={{ width: `${progress * 100}%` }} />
+            </div>
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-primary border-2 border-background shadow-md pointer-events-none"
+              style={{ left: `calc(${progress * 100}% - 6px)` }}
+            />
+          </div>
+
+          <span className="text-[10px] text-muted-foreground font-medium tabular-nums shrink-0 drop-shadow">
+            {formatDuration(post.duration)}
+          </span>
+
+          <button
+            onClick={(e) => { e.stopPropagation(); cycleSpeed(); }}
+            className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${speed > 1 ? "bg-primary/20 border-primary/50 text-primary" : "bg-card/60 backdrop-blur-sm border-border/30 text-muted-foreground"}`}
+          >
+            <Gauge size={12} />
+            <span className="text-[11px] font-bold">{speed}x</span>
+          </button>
+        </div>
       </div>
 
       {/* Actions */}

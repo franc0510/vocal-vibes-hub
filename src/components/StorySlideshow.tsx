@@ -105,7 +105,8 @@ const StorySlideshow = ({
   if (!showVideo && !panel) return null;
 
   const captionBox = caption?.text ? (
-    <div className="absolute inset-x-0 bottom-[22%] flex justify-center px-6 pointer-events-none">
+    // Clear of the author, title and transport that now sit along the bottom.
+    <div className="absolute inset-x-0 bottom-[34%] flex justify-center px-6 pointer-events-none">
       <p className="max-w-[90%] whitespace-pre-line text-center text-[15px] font-medium leading-snug text-white bg-[#17151A]/70 backdrop-blur-sm px-4 py-2.5 rounded-lg">
         {caption.text}
       </p>
