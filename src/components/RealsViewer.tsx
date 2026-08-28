@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, MessageCircle, Share2, Play, Pause, Trash2, Flag, Gauge, MapPin, Crown, X, Ban } from "lucide-react";
+import { Heart, MessageCircle, Share2, Play, Pause, Trash2, Flag, MapPin, Crown, X, Ban } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import CommentsPanel from "./CommentsPanel";
 import SharePanel from "./SharePanel";
@@ -337,45 +337,39 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
       )}
 
       {/*
-        Everything the reader needs sits at the bottom edge: the story fills the
-        screen, and the controls stop competing with it. The old centred card
-        covered the middle of every panel — the very thing the illustration was
-        generated for.
+        A thin strip along the bottom edge, and nothing else: the story gets the
+        whole screen. The padding is computed rather than guessed — the tab bar
+        is about 56px plus the home indicator's safe area, and the record button
+        juts 32px above it, so a flat pb-20 sat underneath all three.
       */}
-      <div className="relative z-10 flex-1 flex flex-col justify-end px-4 pb-20 pr-20">
-        <button onClick={onProfileClick} className="flex items-center gap-2 mb-2 text-left">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className={`w-9 h-9 rounded-full object-cover border-2 ${isWinner ? "border-amber-400" : "border-primary/30"}`} />
-          ) : (
-            <div className={`w-9 h-9 rounded-full gradient-red flex items-center justify-center text-xs font-bold text-primary-foreground border-2 ${isWinner ? "border-amber-400" : "border-primary/30"}`}>
-              {post.author.avatar}
-            </div>
-          )}
-          <div>
-            <p className="text-sm font-bold text-foreground flex items-center gap-1.5 drop-shadow">
-              {post.author.name}
-              {isWinner && <Crown size={14} className="text-amber-400 fill-amber-400" />}
-            </p>
-            <p className="text-[11px] text-muted-foreground">{post.author.username} · {formatTime(post.created_at)}</p>
-          </div>
-        </button>
+      <div
+        className="relative z-10 flex-1 flex flex-col justify-end px-4"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 78px)" }}
+      >
+        <div className="flex items-center gap-2 mb-1.5">
+          <button onClick={onProfileClick} className="flex items-center gap-2 min-w-0">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className={`w-7 h-7 shrink-0 rounded-full object-cover border ${isWinner ? "border-amber-400" : "border-primary/40"}`} />
+            ) : (
+              <div className={`w-7 h-7 shrink-0 rounded-full gradient-red flex items-center justify-center text-[10px] font-bold text-primary-foreground border ${isWinner ? "border-amber-400" : "border-primary/40"}`}>
+                {post.author.avatar}
+              </div>
+            )}
+            <span className="text-xs font-semibold text-foreground truncate drop-shadow">{post.author.name}</span>
+          </button>
 
-        <div className="flex flex-wrap items-center gap-2 mb-1.5">
-          {isWinner && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/50 text-[10px] font-bold text-amber-300">
-              <Crown size={11} className="text-amber-400 fill-amber-400" />
-              VocMe of the Week
-            </span>
-          )}
+          <span className="text-[10px] text-muted-foreground shrink-0">{formatTime(post.created_at)}</span>
+          {isWinner && <Crown size={12} className="text-amber-400 fill-amber-400 shrink-0" />}
           {post.location && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-card/60 backdrop-blur-sm border border-border/20 text-[10px] text-foreground/80 font-medium">
-              <MapPin size={10} className="text-primary" />
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground truncate">
+              <MapPin size={10} className="text-primary shrink-0" />
               {post.location}
             </span>
           )}
         </div>
 
-        <h3 className="text-base font-bold font-display text-foreground leading-snug mb-3 drop-shadow">
+        {/* One line: a title that wraps would push the picture off the screen. */}
+        <h3 className="text-sm font-bold font-display text-foreground truncate mb-2 drop-shadow">
           {post.title}
         </h3>
 
@@ -385,7 +379,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
           on top of that buries the pictures under a wall of grey.
 
           Without a slideshow the text is all there is, so it stays; but clamped
-          to four lines and expandable, rather than however long the person spoke.
+          to three lines and expandable, rather than however long the person spoke.
         */}
         <AnimatePresence>
           {post.transcription && !hasSlideshow && (
@@ -394,59 +388,51 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               onClick={(e) => { e.stopPropagation(); setTranscriptOpen((v) => !v); }}
-              className="w-full bg-blue-500/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-blue-500/30 text-left mb-3"
+              className="w-full bg-card/70 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-border/30 text-left mb-2"
             >
-              <div className="flex items-start gap-2">
-                <span className="text-blue-500 font-bold text-xs shrink-0">CC</span>
-                <p className={`text-xs text-foreground/80 leading-relaxed ${transcriptOpen ? "" : "line-clamp-4"}`}>
-                  {post.transcription}
-                </p>
-              </div>
+              <p className={`text-[11px] text-foreground/80 leading-snug ${transcriptOpen ? "" : "line-clamp-3"}`}>
+                {post.transcription}
+              </p>
             </motion.button>
           )}
         </AnimatePresence>
 
-        {/* Transport: one row, thumb-height, no panel behind it. */}
-        <div className="flex items-center gap-2.5">
+        {/* Transport: one short row, no panel behind it. */}
+        <div className="flex items-center gap-2">
           <button
             onClick={(e) => { e.stopPropagation(); togglePlay(); }}
             aria-label={isPlaying ? "Pause" : "Lecture"}
-            className="w-10 h-10 shrink-0 rounded-full gradient-red flex items-center justify-center shadow-red"
+            className="w-8 h-8 shrink-0 rounded-full gradient-red flex items-center justify-center shadow-red"
           >
-            {isPlaying ? <Pause size={17} className="text-primary-foreground" /> : <Play size={17} className="text-primary-foreground ml-0.5" />}
+            {isPlaying ? <Pause size={14} className="text-primary-foreground" /> : <Play size={14} className="text-primary-foreground ml-0.5" />}
           </button>
 
-          <span className="text-[10px] text-muted-foreground font-medium tabular-nums shrink-0 drop-shadow">
-            {formatDuration(Math.round(progress * post.duration))}
-          </span>
-
-          {/* The bar is thin but its touch target is not: py-3 keeps scrubbing easy. */}
+          {/* The bar is 3px tall; py-2.5 keeps the target thumb-sized anyway. */}
           <div
             ref={seekBarRef}
             onPointerDown={handleSeekDown}
             onPointerMove={handleSeekMove}
             onPointerUp={handleSeekUp}
-            className="relative flex-1 py-3 cursor-pointer touch-none"
+            className="relative flex-1 py-2.5 cursor-pointer touch-none"
           >
-            <div className="w-full h-1 bg-foreground/20 rounded-full overflow-hidden">
+            <div className="w-full h-[3px] bg-foreground/25 rounded-full overflow-hidden">
               <div className="h-full gradient-red rounded-full" style={{ width: `${progress * 100}%` }} />
             </div>
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-primary border-2 border-background shadow-md pointer-events-none"
-              style={{ left: `calc(${progress * 100}% - 6px)` }}
+              className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-primary border border-background shadow pointer-events-none"
+              style={{ left: `calc(${progress * 100}% - 5px)` }}
             />
           </div>
 
           <span className="text-[10px] text-muted-foreground font-medium tabular-nums shrink-0 drop-shadow">
-            {formatDuration(post.duration)}
+            {formatDuration(Math.round(progress * post.duration))} / {formatDuration(post.duration)}
           </span>
 
           <button
             onClick={(e) => { e.stopPropagation(); cycleSpeed(); }}
-            className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${speed > 1 ? "bg-primary/20 border-primary/50 text-primary" : "bg-card/60 backdrop-blur-sm border-border/30 text-muted-foreground"}`}
+            className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md border transition-colors ${speed > 1 ? "bg-primary/20 border-primary/50 text-primary" : "bg-card/60 backdrop-blur-sm border-border/30 text-muted-foreground"}`}
           >
-            <Gauge size={12} />
-            <span className="text-[11px] font-bold">{speed}x</span>
+            {speed}x
           </button>
         </div>
       </div>
