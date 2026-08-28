@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { playExclusive, releaseAudio } from "@/lib/audioManager";
+import { supportedRecorderMime, recordedMime, extensionFor } from "@/lib/recorderMime";
 
 interface Comment {
   id: string;
@@ -244,12 +245,16 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      // Ask for a format iOS can decode, and label the result with what the
+      // recorder actually produced — not with a guess. Hard-coding audio/webm
+      // here is what made these comments unplayable on iPhone.
+      const preferred = supportedRecorderMime();
+      const mr = new MediaRecorder(stream, preferred ? { mimeType: preferred } : {});
       mediaRecorderRef.current = mr;
       chunksRef.current = [];
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = () => {
-        setRecordingBlob(new Blob(chunksRef.current, { type: "audio/webm" }));
+        setRecordingBlob(new Blob(chunksRef.current, { type: recordedMime(mr.mimeType) }));
         stream.getTracks().forEach((t) => t.stop());
       };
       mr.start();
@@ -270,8 +275,11 @@ const CommentsPanel = ({ open, onClose, postId, onCommentAdded }: CommentsPanelP
     try {
       let voiceUrl: string | null = null;
       if (recordingBlob) {
-        const fileName = `${user.id}/${Date.now()}.webm`;
-        const { error } = await supabase.storage.from("voice_comments").upload(fileName, recordingBlob, { contentType: "audio/webm" });
+        const type = recordedMime(recordingBlob.type);
+        const fileName = `${user.id}/${Date.now()}.${extensionFor(type)}`;
+        const { error } = await supabase.storage
+          .from("voice_comments")
+          .upload(fileName, recordingBlob, { contentType: type });
         if (error) throw error;
         voiceUrl = supabase.storage.from("voice_comments").getPublicUrl(fileName).data.publicUrl;
       }
