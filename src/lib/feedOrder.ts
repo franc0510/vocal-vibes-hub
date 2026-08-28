@@ -41,6 +41,18 @@ export function countToReveal(
   return Math.max(visible, at + 1);
 }
 
+/**
+ * Newest first, by publication date.
+ *
+ * A profile is not a discovery surface: its grid is chronological, so the
+ * viewer opened from a tile has to be chronological too. Ordering it like the
+ * feed — illustrated first, then engagement bands, shuffled — left the reader
+ * on a different anecdote from the one they had just touched.
+ */
+export function newestFirst<T extends { created_at: string }>(posts: readonly T[]): T[] {
+  return [...posts].sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 /** Fisher–Yates. Injectable so tests can make the order deterministic. */
 export function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];

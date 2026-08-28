@@ -1,4 +1,4 @@
-import { Play, Trash2 } from "lucide-react";
+import { Play } from "lucide-react";
 
 export interface TilePost {
   id: string;
@@ -15,8 +15,6 @@ interface PostTileProps {
   /** Initials, drawn when there is no picture at all. */
   initials?: string;
   onSelect: () => void;
-  /** Shown only where deleting makes sense — one's own profile. */
-  onDelete?: () => void;
 }
 
 const formatDuration = (s: number) =>
@@ -31,7 +29,7 @@ const formatDuration = (s: number) =>
  * use now, and it takes the best picture available: the generated panel first,
  * then the photo attached to the anecdote, then the author's avatar.
  */
-const PostTile = ({ post, avatarUrl, initials = "U", onSelect, onDelete }: PostTileProps) => {
+const PostTile = ({ post, avatarUrl, initials = "U", onSelect }: PostTileProps) => {
   const picture = post.illustration_cover_url || post.image_url || avatarUrl || null;
 
   return (
@@ -75,19 +73,6 @@ const PostTile = ({ post, avatarUrl, initials = "U", onSelect, onDelete }: PostT
         )}
       </button>
 
-      {onDelete && (
-        <button
-          onClick={(e) => {
-            // The tile underneath opens the anecdote; deleting must not do both.
-            e.stopPropagation();
-            onDelete();
-          }}
-          aria-label={`Supprimer « ${post.title} »`}
-          className="absolute top-1 right-1 w-7 h-7 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 flex items-center justify-center text-muted-foreground active:text-destructive"
-        >
-          <Trash2 size={13} />
-        </button>
-      )}
     </div>
   );
 };

@@ -6,6 +6,7 @@ import CommentsPanel from "./CommentsPanel";
 import SharePanel from "./SharePanel";
 import LikesListModal from "./LikesListModal";
 import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
+import { newestFirst } from "@/lib/feedOrder";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWeeklyVocme } from "@/hooks/useWeeklyVocme";
 import { playExclusive, releaseAudio } from "@/lib/audioManager";
@@ -528,8 +529,11 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const posts = filterUserId
-    // A profile shows that person's anecdotes, in the same order the feed uses.
-    ? allPosts.filter((p) => p.user_id === filterUserId && !p.group_id)
+    // Chronological, newest first — the order the profile grid displays. The
+    // feed's ordering (illustrated first, then engagement bands, shuffled)
+    // makes sense for discovery, but it left the reader on a different
+    // anecdote from the tile they had just touched.
+    ? newestFirst(allPosts.filter((p) => p.user_id === filterUserId && !p.group_id))
     : filterGroupId
     ? allPosts.filter((p) => (p as any).group_id === filterGroupId)
     : filterAllGroups

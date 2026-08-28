@@ -17,8 +17,6 @@ const ProfilePage = () => {
   const [userPosts, setUserPosts] = useState<VoicePostWithAuthor[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<VoicePostWithAuthor | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
   const { followersCount, followingCount } = useFollows(user?.id);
 
@@ -100,32 +98,6 @@ const ProfilePage = () => {
     ? profile.display_name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2)
     : "ME";
 
-  /**
-   * Deletes one of the reader's own anecdotes.
-   *
-   * Row-level security already restricts this to the owner; the confirmation is
-   * for the reader, not the database — a tile is a small target, and there is
-   * no undo. Panels, likes and comments go with it through the foreign keys.
-   */
-  const confirmDelete = async () => {
-    if (!pendingDelete || !user) return;
-    setDeleting(true);
-    const { error } = await supabase
-      .from("voice_posts")
-      .delete()
-      .eq("id", pendingDelete.id)
-      .eq("user_id", user.id);
-    setDeleting(false);
-
-    if (error) {
-      toast.error(error.message || "Suppression impossible");
-      return;
-    }
-    setUserPosts((prev) => prev.filter((p) => p.id !== pendingDelete.id));
-    setPendingDelete(null);
-    toast.success("VocMe supprimé");
-  };
-
   return (
     <div className="min-h-screen pb-24 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}>
       <header className="flex items-center justify-between mb-4">
@@ -193,43 +165,8 @@ const ProfilePage = () => {
               avatarUrl={profile?.avatar_url}
               initials={initials}
               onSelect={() => navigate(`/user/${user!.id}/vocme/${post.id}`)}
-              onDelete={() => setPendingDelete(post)}
             />
           ))}
-        </div>
-      )}
-
-      {pendingDelete && (
-        <div
-          className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex items-center justify-center p-6"
-          onClick={() => !deleting && setPendingDelete(null)}
-        >
-          <div
-            className="w-full max-w-xs bg-card rounded-2xl p-5 border border-border/50 shadow-elevated"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-sm font-bold text-foreground mb-1">Supprimer ce VocMe ?</p>
-            <p className="text-xs text-muted-foreground mb-4 line-clamp-2">« {pendingDelete.title} »</p>
-            <p className="text-[11px] text-muted-foreground mb-4">
-              L'audio, les planches, les likes et les commentaires partent avec. C'est définitif.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPendingDelete(null)}
-                disabled={deleting}
-                className="flex-1 py-2 rounded-xl bg-secondary text-sm font-semibold text-foreground disabled:opacity-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={deleting}
-                className="flex-1 py-2 rounded-xl bg-destructive text-sm font-bold text-destructive-foreground disabled:opacity-50"
-              >
-                {deleting ? "…" : "Supprimer"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
