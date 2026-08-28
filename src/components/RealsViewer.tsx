@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import defaultAvatarBg from "@/assets/default-avatar-bg.png";
 import StorySlideshow from "./StorySlideshow";
+import LiveCaption from "./LiveCaption";
 import { useIllustrations } from "@/hooks/useIllustrations";
 
 const formatCount = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n.toString());
@@ -139,6 +140,9 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
   // The assembled MP4 when it exists, the panels themselves while it is still
   // being made — the story is watchable either way.
   const hasSlideshow = panels.length > 0 || Boolean(post.video_url);
+  // Timestamps are what make live captions possible. Text without them — what
+  // the old manual field produced — still gets the printed block below.
+  const hasCaptions = Boolean(post.transcription_segments?.length);
   const currentMs = progress * (post.duration_ms ?? (post.duration || 0) * 1000);
 
   // Use preloaded audio (already loaded) or create new one
@@ -323,6 +327,13 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
         </div>
       )}
 
+      {/*
+        Captions for anecdotes without a slideshow. They never depended on
+        having pictures — only on having timestamps — and reading the sentence
+        as it is spoken beats a block of text nobody follows.
+      */}
+      {!hasSlideshow && <LiveCaption segments={post.transcription_segments} currentMs={currentMs} />}
+
       {/* VocMe of the week — golden glow border */}
       {isWinner && (
         <div className="absolute inset-0 z-0 pointer-events-none">
@@ -382,7 +393,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
           to three lines and expandable, rather than however long the person spoke.
         */}
         <AnimatePresence>
-          {post.transcription && !hasSlideshow && (
+          {post.transcription && !hasSlideshow && !hasCaptions && (
             <motion.button
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
