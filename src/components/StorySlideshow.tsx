@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { IllustrationPanel } from "@/services/illustrationService";
 import { panelIndexAt } from "@/lib/slideshow";
-import { captionsFromSegments, type TimedSegment } from "@/lib/captions";
+import type { TimedSegment } from "@/lib/captions";
+import LiveCaption from "./LiveCaption";
 
 /** Alternating pan directions, so consecutive panels don't drift the same way. */
 const PAN_DIRECTIONS: [number, number][] = [
@@ -56,20 +57,6 @@ const StorySlideshow = ({
     return () => query.removeEventListener("change", onChange);
   }, []);
 
-  /**
-   * The captions are drawn here rather than burned into the file: live text
-   * stays sharp at any size, and the same MP4 serves every language of caption
-   * we might add later.
-   */
-  const captions = useMemo(
-    () => (segments?.length ? captionsFromSegments(segments) : []),
-    [segments]
-  );
-  const caption = useMemo(
-    () => captions.find((c) => currentMs >= c.start_ms && currentMs < c.end_ms),
-    [captions, currentMs]
-  );
-
   // The MP4 carries its own audio track, but the post is already playing the
   // recording through its own element — which owns seeking, speed and the
   // waveform. So the video runs muted and is nudged back into step with it.
@@ -103,19 +90,6 @@ const StorySlideshow = ({
 
   const showVideo = Boolean(videoUrl) && !videoFailed;
   if (!showVideo && !panel) return null;
-
-  const captionBox = caption?.text ? (
-    // Sits just above the bottom strip. Measured from the edge rather than as a
-    // percentage: the strip's height is fixed, the viewport's is not.
-    <div
-      className="absolute inset-x-0 flex justify-center px-6 pointer-events-none"
-      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 168px)" }}
-    >
-      <p className="max-w-[90%] whitespace-pre-line text-center text-[15px] font-medium leading-snug text-white bg-[#17151A]/70 backdrop-blur-sm px-4 py-2.5 rounded-lg">
-        {caption.text}
-      </p>
-    </div>
-  ) : null;
 
   const span = panel ? Math.max(1, panel.end_ms - panel.start_ms) : 1;
   const through = panel
@@ -171,7 +145,7 @@ const StorySlideshow = ({
       )}
 
       {overlay}
-      {captionBox}
+      <LiveCaption segments={segments} currentMs={currentMs} />
     </div>
   );
 };

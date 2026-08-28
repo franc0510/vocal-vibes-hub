@@ -10,6 +10,7 @@ import CommentsPanel from "@/components/CommentsPanel";
 import SharePanel from "@/components/SharePanel";
 import LikesListModal from "@/components/LikesListModal";
 import StorySlideshow from "@/components/StorySlideshow";
+import LiveCaption from "@/components/LiveCaption";
 import { useIllustrations } from "@/hooks/useIllustrations";
 import { parseSegments } from "@/lib/captions";
 
@@ -246,6 +247,10 @@ const PostPage = () => {
   // Same test as the feed: an anecdote whose MP4 exists is watchable even
   // before its panel rows are loaded, so video_url counts on its own.
   const hasSlideshow = panels.length > 0 || Boolean(post.video_url);
+  const segments = parseSegments(post.transcription_segments);
+  // Live captions need timestamps, not pictures. Text without them keeps the
+  // printed block further down.
+  const hasCaptions = segments.length > 0;
   // duration_ms is the measured length; `duration` is a whole-second counter
   // and always a little short, which slid every panel out of step with the
   // voice — the same shortfall that used to cut the closing words.
@@ -275,7 +280,7 @@ const PostPage = () => {
             currentMs={currentMs}
             videoUrl={post.video_url}
             isPlaying={playing}
-            segments={parseSegments(post.transcription_segments)}
+            segments={segments}
             overlay={
               <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-background/30 to-background/95" />
             }
@@ -287,6 +292,13 @@ const PostPage = () => {
           <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-background/30 to-background/95" />
         </div>
       ) : null}
+
+      {/* Captions here too when there is no slideshow to carry them. */}
+      {!hasSlideshow && (
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          <LiveCaption segments={segments} currentMs={currentMs} />
+        </div>
+      )}
 
       <div
         className="relative z-10 px-4 pb-6"
@@ -394,7 +406,7 @@ const PostPage = () => {
         </div>
 
         {/* Hidden under a slideshow: the captions already say this, in step. */}
-        {post.transcription && !hasSlideshow && (
+        {post.transcription && !hasSlideshow && !hasCaptions && (
           <div className="bg-card/50 backdrop-blur-sm rounded-xl px-4 py-3 border border-border/20 mb-4">
             <p className="text-xs text-foreground/80 leading-relaxed italic">
               "{post.transcription}"
