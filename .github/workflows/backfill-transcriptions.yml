@@ -1,0 +1,86 @@
+name: Transcrire les anecdotes qui n'en ont pas
+
+# La transcription automatique n'existe que depuis peu : les anecdotes plus
+# anciennes n'en ont aucune, donc pas de bloc de texte dans l'app et pas
+# d'horodatage pour ce qui viendrait ensuite.
+#
+#   Actions → Transcrire les anecdotes qui n'en ont pas → Run workflow
+#
+# Seule la parole est transcrite. Aucune image, aucune vidéo, rien de généré.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Que faire"
+        required: true
+        default: compter (n'écrit rien)
+        type: choice
+        options:
+          - compter (n'écrit rien)
+          - transcrire pour de vrai
+      limit:
+        description: "S'arrêter après N anecdotes. Vide = toutes."
+        required: false
+        default: ""
+
+jobs:
+  backfill:
+    name: Transcrire
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      WRITE: ${{ inputs.action == 'transcrire pour de vrai' }}
+      FAL_KEY: ${{ secrets.FAL_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      # Quelques secondes ici valent mieux qu'un échec après l'installation.
+      - name: Vérifier les secrets
+        run: |
+          if [ -z "$FAL_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::Il faut FAL_KEY ou OPENAI_API_KEY pour transcrire."
+            exit 1
+          fi
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY manquante — ce script écrit dans les posts."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Transcrire
+        env:
+          IN_LIMIT: ${{ inputs.limit }}
+        run: |
+          ARGS=()
+          if [ -n "$IN_LIMIT" ]; then
+            ARGS+=(--limit "$IN_LIMIT")
+          fi
+          if [ "$WRITE" = "true" ]; then
+            ARGS+=(--yes)
+          fi
+          npx tsx scripts/backfill-transcriptions.ts "${ARGS[@]}"
+
+      - name: Récapitulatif
+        if: always()
+        run: |
+          {
+            echo "## Transcriptions"
+            echo
+            if [ "$WRITE" = "true" ]; then
+              echo "Les anecdotes transcrites affichent désormais leur texte dans l'app."
+              echo "Reconstruis le bundle si tu passes par Xcode : \`npm run ios:build\`."
+            else
+              echo "Rien n'a été écrit. Relance en choisissant **transcrire pour de vrai**."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
