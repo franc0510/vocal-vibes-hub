@@ -1,16 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Play, Pause, MessageCircle, X, UserPlus, UserCheck, Heart, Share2, Flag, Ban, MoreVertical } from "lucide-react";
+import { ArrowLeft, MessageCircle, X, UserPlus, UserCheck, Flag, Ban, MoreVertical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { playExclusive, releaseAudio } from "@/lib/audioManager";
+import PostTile from "@/components/PostTile";
 import { useFollows } from "@/hooks/useFollows";
-import WaveformVisualizer from "@/components/WaveformVisualizer";
 import FollowListModal from "@/components/FollowListModal";
-import CommentsPanel from "@/components/CommentsPanel";
-import SharePanel from "@/components/SharePanel";
-import LikesListModal from "@/components/LikesListModal";
 import { toast } from "sonner";
 
 interface Profile {
@@ -29,206 +25,10 @@ interface Post {
   created_at: string;
   likes_count: number;
   comments_count: number;
+  illustration_cover_url?: string | null;
+  image_url?: string | null;
 }
 
-const generateWaveform = () => Array.from({ length: 24 }, () => 0.15 + Math.random() * 0.85);
-const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
-
-const PostTile = ({ post, onSelect }: { post: Post; onSelect: () => void }) => (
-  <button
-    onClick={onSelect}
-    className="aspect-square bg-card border border-border/30 rounded-xl flex flex-col items-center justify-center p-2 hover:bg-primary/5 transition-colors"
-  >
-    <div className="w-8 h-8 rounded-full gradient-red flex items-center justify-center mb-1">
-      <Play size={14} className="text-primary-foreground ml-0.5" />
-    </div>
-    <p className="text-[10px] text-foreground font-medium text-center line-clamp-2 leading-tight">{post.title}</p>
-    <p className="text-[9px] text-muted-foreground mt-0.5">{formatDuration(post.duration)}</p>
-  </button>
-);
-
-const PostPlayer = ({ post, onClose }: { post: Post; onClose: () => void }) => {
-  const { user } = useAuth();
-  const [playing, setPlaying] = useState(false);
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(post.likes_count);
-  const [commentCount, setCommentCount] = useState(post.comments_count ?? 0);
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [likesOpen, setLikesOpen] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const waveform = useRef(generateWaveform()).current;
-
-  // Check if user already liked
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("voice_post_likes")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("post_id", post.id)
-      .maybeSingle()
-      .then(({ data }) => setLiked(!!data));
-  }, [user?.id, post.id]);
-
-  // Fetch actual counts
-  useEffect(() => {
-    Promise.all([
-      supabase.from("voice_post_likes").select("id", { count: "exact", head: true }).eq("post_id", post.id),
-      supabase.from("comments").select("id", { count: "exact", head: true }).eq("post_id", post.id),
-    ]).then(([likesRes, commentsRes]) => {
-      if (likesRes.count !== null) setLikeCount(likesRes.count);
-      if (commentsRes.count !== null) setCommentCount(commentsRes.count);
-    });
-  }, [post.id]);
-
-  // Cleanup audio on unmount / close
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        releaseAudio(audioRef.current);
-        audioRef.current.src = "";
-        audioRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleClose = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      releaseAudio(audioRef.current);
-      audioRef.current.src = "";
-      audioRef.current = null;
-    }
-    setPlaying(false);
-    onClose();
-  };
-
-  // Pause when comments / share / likes panels open
-  useEffect(() => {
-    if ((commentsOpen || shareOpen || likesOpen) && audioRef.current && playing) {
-      audioRef.current.pause();
-      releaseAudio(audioRef.current);
-      setPlaying(false);
-    }
-  }, [commentsOpen, shareOpen, likesOpen]);
-
-  const toggle = () => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio(post.audio_url);
-      audioRef.current.crossOrigin = "anonymous";
-      audioRef.current.onended = () => { setPlaying(false); releaseAudio(audioRef.current); };
-      audioRef.current.onpause = () => setPlaying(false);
-      audioRef.current.onplay = () => setPlaying(true);
-    }
-    if (playing) { audioRef.current.pause(); releaseAudio(audioRef.current); }
-    else playExclusive(audioRef.current).catch(() => {});
-  };
-
-  const toggleLike = async () => {
-    if (!user) return;
-    const newLiked = !liked;
-    setLiked(newLiked);
-    setLikeCount((c) => newLiked ? c + 1 : c - 1);
-    try {
-      if (newLiked) await supabase.from("voice_post_likes").insert({ user_id: user.id, post_id: post.id });
-      else await supabase.from("voice_post_likes").delete().eq("user_id", user.id).eq("post_id", post.id);
-      const { count } = await supabase.from("voice_post_likes").select("id", { count: "exact", head: true }).eq("post_id", post.id);
-      if (count !== null) setLikeCount(count);
-    } catch {
-      setLiked(!newLiked);
-      setLikeCount((c) => newLiked ? c - 1 : c + 1);
-    }
-  };
-
-  return (
-    <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex items-center justify-center p-4"
-        onClick={() => {
-          // Don't close PostPlayer if a sub-panel is open
-          if (commentsOpen || shareOpen || likesOpen) return;
-          handleClose();
-        }}
-      >
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.8, opacity: 0 }}
-          className="w-full max-w-sm bg-card rounded-2xl p-5 border border-border/50 shadow-elevated"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-foreground font-display">{post.title}</h3>
-            <button onClick={handleClose} className="text-muted-foreground"><X size={18} /></button>
-          </div>
-          <div
-            className="flex items-center gap-3 bg-secondary/60 rounded-xl p-4 cursor-pointer"
-            onClick={toggle}
-          >
-            <button className="w-11 h-11 rounded-full gradient-red flex items-center justify-center text-primary-foreground shrink-0 shadow-red">
-              {playing ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
-            </button>
-            <div className="flex-1 overflow-hidden h-10">
-              <WaveformVisualizer bars={waveform} isPlaying={playing} size="md" />
-            </div>
-          </div>
-
-          {/* Stats: like, comment, share */}
-          <div className="flex items-center justify-around mt-4 pt-3 border-t border-border/30">
-            <div className="flex items-center gap-2">
-              <button onClick={toggleLike} className="flex items-center gap-1.5" aria-label="Like">
-                <motion.div whileTap={{ scale: 1.3 }}>
-                  <Heart size={20} className={liked ? "fill-primary text-primary" : "text-muted-foreground"} />
-                </motion.div>
-              </button>
-              <button
-                onClick={() => setLikesOpen(true)}
-                className={`text-xs font-medium underline-offset-2 hover:underline ${liked ? "text-primary" : "text-muted-foreground"}`}
-                aria-label="See who liked"
-              >
-                {likeCount}
-              </button>
-            </div>
-            <button onClick={() => setCommentsOpen(true)} className="flex items-center gap-1.5" aria-label="Open comments">
-              <MessageCircle size={20} className="text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">{commentCount}</span>
-            </button>
-            <button onClick={() => setShareOpen(true)} className="flex items-center gap-1.5" aria-label="Share">
-              <Share2 size={20} className="text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">Share</span>
-            </button>
-          </div>
-
-          <p className="text-[10px] text-muted-foreground mt-3 text-center">{formatDuration(post.duration)}</p>
-        </motion.div>
-      </motion.div>
-
-      <CommentsPanel
-        open={commentsOpen}
-        onClose={() => setCommentsOpen(false)}
-        postId={post.id}
-        onCommentAdded={() => setCommentCount((c) => c + 1)}
-      />
-      <SharePanel
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        postId={post.id}
-        postTitle={post.title}
-        postAuthor=""
-      />
-      <LikesListModal
-        open={likesOpen}
-        onClose={() => setLikesOpen(false)}
-        postId={post.id}
-      />
-    </>
-  );
-};
 
 const UserProfilePage = () => {
   const { userId } = useParams();
@@ -238,7 +38,6 @@ const UserProfilePage = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
   const [reportBlockOpen, setReportBlockOpen] = useState(false);
 
@@ -257,11 +56,11 @@ const UserProfilePage = () => {
       setPosts((postsRes.data as Post[]) || []);
       setLoading(false);
 
-      // Auto-open a specific post if navigated from notification
+      // Arriving from a notification: go straight to that anecdote, full
+      // screen, rather than opening a card the reader then has to leave.
       const postIdParam = searchParams.get("postId");
-      if (postIdParam && postsRes.data) {
-        const matchedPost = (postsRes.data as Post[]).find((p) => p.id === postIdParam);
-        if (matchedPost) setSelectedPost(matchedPost);
+      if (postIdParam && (postsRes.data as Post[] | null)?.some((p) => p.id === postIdParam)) {
+        navigate(`/user/${userId}/vocme/${postIdParam}`, { replace: true });
       }
     };
     load();
@@ -363,14 +162,16 @@ const UserProfilePage = () => {
       ) : (
         <div className="grid grid-cols-3 gap-1.5">
           {posts.map((post) => (
-            <PostTile key={post.id} post={post} onSelect={() => setSelectedPost(post)} />
+            <PostTile
+              key={post.id}
+              post={post}
+              avatarUrl={profile.avatar_url}
+              initials={initials}
+              onSelect={() => navigate(`/user/${userId}/vocme/${post.id}`)}
+            />
           ))}
         </div>
       )}
-
-      <AnimatePresence>
-        {selectedPost && <PostPlayer post={selectedPost} onClose={() => setSelectedPost(null)} />}
-      </AnimatePresence>
 
       {userId && (
         <FollowListModal

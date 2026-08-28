@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { Settings, LogOut, Camera, Loader2, X, Play } from "lucide-react";
-import VoiceCard from "@/components/VoiceCard";
+import { motion } from "framer-motion";
+import { Settings, LogOut, Camera, Loader2 } from "lucide-react";
+import PostTile from "@/components/PostTile";
 import { useAuth } from "@/contexts/AuthContext";
 import { type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
 import { parseSegments } from "@/lib/captions";
@@ -17,7 +17,8 @@ const ProfilePage = () => {
   const [userPosts, setUserPosts] = useState<VoicePostWithAuthor[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<VoicePostWithAuthor | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<VoicePostWithAuthor | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [followListType, setFollowListType] = useState<"followers" | "following" | null>(null);
   const { followersCount, followingCount } = useFollows(user?.id);
 
@@ -99,6 +100,32 @@ const ProfilePage = () => {
     ? profile.display_name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2)
     : "ME";
 
+  /**
+   * Deletes one of the reader's own anecdotes.
+   *
+   * Row-level security already restricts this to the owner; the confirmation is
+   * for the reader, not the database — a tile is a small target, and there is
+   * no undo. Panels, likes and comments go with it through the foreign keys.
+   */
+  const confirmDelete = async () => {
+    if (!pendingDelete || !user) return;
+    setDeleting(true);
+    const { error } = await supabase
+      .from("voice_posts")
+      .delete()
+      .eq("id", pendingDelete.id)
+      .eq("user_id", user.id);
+    setDeleting(false);
+
+    if (error) {
+      toast.error(error.message || "Suppression impossible");
+      return;
+    }
+    setUserPosts((prev) => prev.filter((p) => p.id !== pendingDelete.id));
+    setPendingDelete(null);
+    toast.success("VocMe supprimé");
+  };
+
   return (
     <div className="min-h-screen pb-24 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}>
       <header className="flex items-center justify-between mb-4">
@@ -158,46 +185,53 @@ const ProfilePage = () => {
           <p className="text-muted-foreground text-sm">No stories yet. Record your first one!</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-3 gap-1.5">
           {userPosts.map((post) => (
-            <button
+            <PostTile
               key={post.id}
-              onClick={() => setSelectedPost(post)}
-              className="aspect-square bg-card border border-border/30 rounded-md flex flex-col items-center justify-center p-2 hover:bg-primary/5 transition-colors"
-            >
-              <div className="w-8 h-8 rounded-full gradient-red flex items-center justify-center mb-1">
-                <Play size={14} className="text-primary-foreground ml-0.5" />
-              </div>
-              <p className="text-[10px] text-foreground font-medium text-center line-clamp-2 leading-tight">{post.title}</p>
-            </button>
+              post={post}
+              avatarUrl={profile?.avatar_url}
+              initials={initials}
+              onSelect={() => navigate(`/user/${user!.id}/vocme/${post.id}`)}
+              onDelete={() => setPendingDelete(post)}
+            />
           ))}
         </div>
       )}
 
-      <AnimatePresence>
-        {selectedPost && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setSelectedPost(null)}
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-background/90 backdrop-blur-sm flex items-center justify-center p-6"
+          onClick={() => !deleting && setPendingDelete(null)}
+        >
+          <div
+            className="w-full max-w-xs bg-card rounded-2xl p-5 border border-border/50 shadow-elevated"
+            onClick={(e) => e.stopPropagation()}
           >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              className="w-full max-w-sm relative"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button onClick={() => setSelectedPost(null)} className="absolute -top-10 right-0 text-muted-foreground hover:text-foreground z-10">
-                <X size={24} />
+            <p className="text-sm font-bold text-foreground mb-1">Supprimer ce VocMe ?</p>
+            <p className="text-xs text-muted-foreground mb-4 line-clamp-2">« {pendingDelete.title} »</p>
+            <p className="text-[11px] text-muted-foreground mb-4">
+              L'audio, les planches, les likes et les commentaires partent avec. C'est définitif.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPendingDelete(null)}
+                disabled={deleting}
+                className="flex-1 py-2 rounded-xl bg-secondary text-sm font-semibold text-foreground disabled:opacity-50"
+              >
+                Annuler
               </button>
-              <VoiceCard post={selectedPost} index={0} />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="flex-1 py-2 rounded-xl bg-destructive text-sm font-bold text-destructive-foreground disabled:opacity-50"
+              >
+                {deleting ? "…" : "Supprimer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {user && (
         <FollowListModal
