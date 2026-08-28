@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { supportedRecorderMime, recordedMime } from "@/lib/recorderMime";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Square, Send, Loader2, MicOff, AlertCircle, Settings, Image as ImageIcon, MapPin, Play, Pause, Trash2, X, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -29,26 +30,6 @@ const getTodayTopic = () => {
   return DAILY_TOPICS[day] || "Tell us your best anecdote!";
 };
 
-// Forcer MP4/AAC sur tous les navigateurs
-const getSupportedMimeType = () => {
-  const types = [
-    "audio/mp4",
-    "audio/aac",
-    "audio/webm;codecs=opus",
-    "audio/webm",
-  ];
-  
-  for (const type of types) {
-    if (MediaRecorder.isTypeSupported(type)) {
-      console.log("✅ Using MIME type:", type);
-      return type;
-    }
-  }
-  
-  // Fallback : retourner "" et laisser le navigateur décider (généralement MP4 sur iOS)
-  console.log("⚠️ No MIME type supported, using default");
-  return "";
-};
 
 const RecordPage = () => {
   const { user } = useAuth();
@@ -133,7 +114,7 @@ const RecordPage = () => {
     if (!stream) return;
 
     try {
-      const mimeType = getSupportedMimeType();
+      const mimeType = supportedRecorderMime();
       const options = mimeType ? { mimeType } : {}; // Sur iOS, {} = MP4 par défaut
       
       const mediaRecorder = new MediaRecorder(stream, options);
@@ -146,7 +127,7 @@ const RecordPage = () => {
       
       mediaRecorder.onstop = () => {
         // iOS enregistre en MP4 par défaut
-        const actualMimeType = mediaRecorder.mimeType || "audio/mp4";
+        const actualMimeType = recordedMime(mediaRecorder.mimeType);
         console.log("📦 Recording complete. MIME type:", actualMimeType);
         setAudioBlob(new Blob(chunksRef.current, { type: actualMimeType }));
         stream.getTracks().forEach((t) => t.stop());
