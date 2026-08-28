@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { orderFeed, isIllustrated, countToReveal, type FeedCandidate } from "./feedOrder";
+import { orderFeed, isIllustrated, countToReveal, newestFirst, type FeedCandidate } from "./feedOrder";
 
 /** No shuffling, so the ordering rules alone decide. */
 const stable = <T,>(a: T[]): T[] => [...a];
@@ -106,5 +106,31 @@ describe("countToReveal", () => {
 
   it("rend null sur un feed vide plutôt que 0", () => {
     expect(countToReveal([], 0, "a")).toBeNull();
+  });
+});
+
+describe("newestFirst", () => {
+  const p = (id: string, created_at: string) => ({ id, created_at });
+
+  it("classe du plus récent au plus ancien", () => {
+    const out = newestFirst([p("vieux", "2026-01-01"), p("neuf", "2026-08-01"), p("moyen", "2026-04-01")]);
+    expect(out.map((x) => x.id)).toEqual(["neuf", "moyen", "vieux"]);
+  });
+
+  it("ne modifie pas la liste reçue", () => {
+    // The viewer derives this on every render from the hook's array; sorting
+    // that array in place would reorder the feed itself.
+    const input = [p("a", "2026-01-01"), p("b", "2026-08-01")];
+    newestFirst(input);
+    expect(input.map((x) => x.id)).toEqual(["a", "b"]);
+  });
+
+  it("donne le même ordre que la grille du profil, qui trie par created_at desc", () => {
+    const grid = [p("c", "2026-03-03"), p("b", "2026-02-02"), p("a", "2026-01-01")];
+    expect(newestFirst([...grid].reverse()).map((x) => x.id)).toEqual(grid.map((x) => x.id));
+  });
+
+  it("supporte une liste vide", () => {
+    expect(newestFirst([])).toEqual([]);
   });
 });
