@@ -60,6 +60,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
   const [progress, setProgress] = useState(0);
   const [hasListened, setHasListened] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animRef = useRef<number>(0);
   const seekBarRef = useRef<HTMLDivElement | null>(null);
@@ -447,20 +448,30 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
           </div>
         </motion.div>
 
-        {/* Transcription / text */}
+        {/*
+          Transcription. An illustrated anecdote already carries live captions,
+          drawn over the story in step with the voice — printing the whole text
+          on top of that buries the pictures under a wall of grey.
+
+          Without a slideshow the text is all there is, so it stays; but clamped
+          to four lines and expandable, rather than however long the person spoke.
+        */}
         <AnimatePresence>
-          {post.transcription && (
-            <motion.div 
+          {post.transcription && !hasSlideshow && (
+            <motion.button
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="w-full max-w-[300px] bg-blue-500/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-blue-500/30"
+              onClick={(e) => { e.stopPropagation(); setTranscriptOpen((v) => !v); }}
+              className="w-full max-w-[300px] bg-blue-500/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-blue-500/30 text-left"
             >
               <div className="flex items-start gap-2">
-                <span className="text-blue-500 font-bold text-sm">CC</span>
-                <p className="text-xs text-foreground/80 leading-relaxed">{post.transcription}</p>
+                <span className="text-blue-500 font-bold text-sm shrink-0">CC</span>
+                <p className={`text-xs text-foreground/80 leading-relaxed ${transcriptOpen ? "" : "line-clamp-4"}`}>
+                  {post.transcription}
+                </p>
               </div>
-            </motion.div>
+            </motion.button>
           )}
         </AnimatePresence>
       </div>

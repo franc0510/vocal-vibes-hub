@@ -44,6 +44,8 @@ const StorySlideshow = ({
   overlay,
 }: StorySlideshowProps) => {
   const [reduceMotion, setReduceMotion] = useState(false);
+  // A video that will not load must not leave a blank screen where a story was.
+  const [videoFailed, setVideoFailed] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -72,6 +74,10 @@ const StorySlideshow = ({
   // recording through its own element — which owns seeking, speed and the
   // waveform. So the video runs muted and is nudged back into step with it.
   useEffect(() => {
+    setVideoFailed(false);
+  }, [videoUrl]);
+
+  useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
 
@@ -88,15 +94,15 @@ const StorySlideshow = ({
   // Keep the next panel warm so the crossfade never lands on a blank frame.
   const preloadedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (videoUrl) return;
     const next = panels[index + 1];
     if (!next || preloadedRef.current.has(next.image_url)) return;
     preloadedRef.current.add(next.image_url);
     const img = new Image();
     img.src = next.image_url;
-  }, [panels, index, videoUrl]);
+  }, [panels, index]);
 
-  if (!videoUrl && !panel) return null;
+  const showVideo = Boolean(videoUrl) && !videoFailed;
+  if (!showVideo && !panel) return null;
 
   const captionBox = caption?.text ? (
     <div className="absolute inset-x-0 bottom-[22%] flex justify-center px-6 pointer-events-none">
@@ -106,49 +112,59 @@ const StorySlideshow = ({
     </div>
   ) : null;
 
-  if (videoUrl) {
-    return (
-      <div className={`absolute inset-0 overflow-hidden ${className}`}>
-        <video
-          ref={videoRef}
-          src={videoUrl}
-          muted
-          playsInline
-          preload="auto"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-        {overlay}
-        {captionBox}
-      </div>
-    );
-  }
+  const span = panel ? Math.max(1, panel.end_ms - panel.start_ms) : 1;
+  const through = panel
+    ? Math.min(1, Math.max(0, (currentMs - panel.start_ms) / span))
+    : 0;
 
-  const span = Math.max(1, panel!.end_ms - panel!.start_ms);
-  const through = Math.min(1, Math.max(0, (currentMs - panel!.start_ms) / span));
-
-  const [dirX, dirY] = PAN_DIRECTIONS[index % PAN_DIRECTIONS.length];
+  const [dirX, dirY] = PAN_DIRECTIONS[Math.max(0, index) % PAN_DIRECTIONS.length];
   // Driven by audio position rather than a self-running animation, so the
-  // movement pauses, resumes and scrubs exactly with the voice.
-  const transform = reduceMotion
-    ? undefined
-    : `scale(${1 + ZOOM_RANGE * through}) translate(${dirX * PAN_PERCENT * through}%, ${dirY * PAN_PERCENT * through}%)`;
+  // movement pauses, resumes and scrubs exactly with the voice. Skipped under
+  // the video, where nobody would see it.
+  const transform =
+    reduceMotion || showVideo
+      ? undefined
+      : `scale(${1 + ZOOM_RANGE * through}) translate(${dirX * PAN_PERCENT * through}%, ${dirY * PAN_PERCENT * through}%)`;
 
   return (
     <div className={`absolute inset-0 overflow-hidden ${className}`}>
-      <AnimatePresence initial={false}>
-        <motion.img
-          key={panel!.id}
-          src={panel!.image_url}
-          alt={panel!.caption ?? ""}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: reduceMotion ? 0.15 : 0.6, ease: "easeInOut" }}
+      {/*
+        The panels are the floor, the video the finish. An iOS <video> paints
+        nothing until it has decoded a frame, so playing it alone left the story
+        as a white rectangle for the first seconds — and forever if the file
+        never loaded. Drawing the panel underneath means there is always a
+        picture, and a video that fails simply reveals the slideshow.
+      */}
+      {panel && (
+        <AnimatePresence initial={false}>
+          <motion.img
+            key={panel.id}
+            src={panel.image_url}
+            alt={panel.caption ?? ""}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0.15 : 0.6, ease: "easeInOut" }}
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform, willChange: "transform, opacity" }}
+            draggable={false}
+          />
+        </AnimatePresence>
+      )}
+
+      {showVideo && (
+        <video
+          ref={videoRef}
+          src={videoUrl!}
+          muted
+          playsInline
+          preload="auto"
+          poster={panels[0]?.image_url}
+          onError={() => setVideoFailed(true)}
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ transform, willChange: "transform, opacity" }}
-          draggable={false}
         />
-      </AnimatePresence>
+      )}
+
       {overlay}
       {captionBox}
     </div>
