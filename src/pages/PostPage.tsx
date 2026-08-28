@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Heart, MessageCircle, Share2, Play, Pause, Gauge, MapPin, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Heart, MessageCircle, Share2, Play, Pause, MapPin, Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -334,52 +334,48 @@ const PostPage = () => {
         <h1 className="text-xl font-bold font-display text-foreground mb-5">{post.title}</h1>
 
         {/*
-          One row instead of a card, for the same reason as the feed: the
-          illustration is the point, and a panel of controls in front of it is
-          the one thing guaranteed to hide it.
+          One short row instead of a card, and the same gauge as the feed so the
+          two screens feel like one app: the illustration is the point, and a
+          panel of controls in front of it is what hides it.
         */}
-        <div className="flex items-center gap-2.5 mb-4">
+        <div className="flex items-center gap-2 mb-4">
           <button
             onClick={(e) => {
               e.stopPropagation();
               togglePlay();
             }}
             aria-label={playing ? "Pause" : "Lecture"}
-            className="w-10 h-10 shrink-0 rounded-full gradient-red flex items-center justify-center shadow-red"
+            className="w-8 h-8 shrink-0 rounded-full gradient-red flex items-center justify-center shadow-red"
           >
             {playing ? (
-              <Pause size={17} className="text-primary-foreground" />
+              <Pause size={14} className="text-primary-foreground" />
             ) : (
-              <Play size={17} className="text-primary-foreground ml-0.5" />
+              <Play size={14} className="text-primary-foreground ml-0.5" />
             )}
           </button>
 
-          <span className="text-[10px] text-muted-foreground font-medium tabular-nums shrink-0">
-            {formatDuration(Math.round(progress * post.duration))}
-          </span>
-
-          {/* Thin bar, thick touch target. */}
+          {/* Thin bar, thumb-sized target. */}
           <div
             ref={seekBarRef}
             onPointerDown={handleSeekDown}
             onPointerMove={handleSeekMove}
             onPointerUp={handleSeekUp}
-            className="relative flex-1 py-3 cursor-pointer touch-none"
+            className="relative flex-1 py-2.5 cursor-pointer touch-none"
           >
-            <div className="w-full h-1 bg-foreground/20 rounded-full overflow-hidden">
+            <div className="w-full h-[3px] bg-foreground/25 rounded-full overflow-hidden">
               <div
                 className="h-full gradient-red rounded-full"
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-primary border-2 border-background shadow-md pointer-events-none"
-              style={{ left: `calc(${progress * 100}% - 6px)` }}
+              className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-primary border border-background shadow pointer-events-none"
+              style={{ left: `calc(${progress * 100}% - 5px)` }}
             />
           </div>
 
           <span className="text-[10px] text-muted-foreground font-medium tabular-nums shrink-0">
-            {formatDuration(post.duration)}
+            {formatDuration(Math.round(progress * post.duration))} / {formatDuration(post.duration)}
           </span>
 
           <button
@@ -387,14 +383,13 @@ const PostPage = () => {
               e.stopPropagation();
               cycleSpeed();
             }}
-            className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${
+            className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md border transition-colors ${
               speed > 1
                 ? "bg-primary/20 border-primary/50 text-primary"
                 : "bg-card/60 backdrop-blur-sm border-border/30 text-muted-foreground"
             }`}
           >
-            <Gauge size={12} />
-            <span className="text-[11px] font-bold">{speed}x</span>
+            {speed}x
           </button>
         </div>
 

@@ -105,8 +105,12 @@ const StorySlideshow = ({
   if (!showVideo && !panel) return null;
 
   const captionBox = caption?.text ? (
-    // Clear of the author, title and transport that now sit along the bottom.
-    <div className="absolute inset-x-0 bottom-[34%] flex justify-center px-6 pointer-events-none">
+    // Sits just above the bottom strip. Measured from the edge rather than as a
+    // percentage: the strip's height is fixed, the viewport's is not.
+    <div
+      className="absolute inset-x-0 flex justify-center px-6 pointer-events-none"
+      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 168px)" }}
+    >
       <p className="max-w-[90%] whitespace-pre-line text-center text-[15px] font-medium leading-snug text-white bg-[#17151A]/70 backdrop-blur-sm px-4 py-2.5 rounded-lg">
         {caption.text}
       </p>
