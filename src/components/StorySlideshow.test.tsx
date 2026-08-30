@@ -4,9 +4,14 @@ import StorySlideshow from "./StorySlideshow";
 import type { IllustrationPanel } from "@/services/illustrationService";
 
 /**
- * An iOS <video> paints nothing until it has decoded a frame, so a story that
- * rendered the video alone showed a white rectangle for the first seconds — and
- * forever when the file failed to load. The panels have to be underneath.
+ * Which rendering wins, and why.
+ *
+ * The panels are plain images driven by the audio position: they pan, cross-fade
+ * and scrub identically everywhere, and the captions stay live text. The MP4
+ * added nothing in the app and could refuse to start on iOS, leaving a frozen
+ * poster over a story that was working underneath — which is exactly what
+ * happened in production. So panels win whenever they exist; the file is what
+ * leaves the app when an anecdote is shared.
  */
 const panel = (idx: number, over: Partial<IllustrationPanel> = {}): IllustrationPanel => ({
   id: `p${idx}`,
@@ -22,28 +27,30 @@ const panel = (idx: number, over: Partial<IllustrationPanel> = {}): Illustration
 describe("StorySlideshow", () => {
   const panels = [panel(0), panel(1)];
 
-  it("dessine une planche sous la vidéo, jamais un vide", () => {
+  it("joue les planches, pas le MP4, dès qu'il y a des planches", () => {
     const { container } = render(
       <StorySlideshow panels={panels} currentMs={200} videoUrl="https://x/v.mp4" />
     );
-    expect(container.querySelector("video")).not.toBeNull();
+    expect(container.querySelector("video")).toBeNull();
     expect(container.querySelector("img")).not.toBeNull();
   });
 
-  it("donne la première planche en poster, visible avant tout décodage", () => {
-    const { container } = render(
-      <StorySlideshow panels={panels} currentMs={0} videoUrl="https://x/v.mp4" />
-    );
-    expect(container.querySelector("video")?.getAttribute("poster")).toBe("https://x/0.jpg");
+  it("change de planche quand l'audio avance — le symptôme signalé", () => {
+    const first = render(<StorySlideshow panels={panels} currentMs={200} videoUrl="https://x/v.mp4" />);
+    const second = render(<StorySlideshow panels={panels} currentMs={1500} videoUrl="https://x/v.mp4" />);
+    expect(first.container.querySelector("img")?.getAttribute("src")).toBe("https://x/0.jpg");
+    expect(second.container.querySelector("img")?.getAttribute("src")).toBe("https://x/1.jpg");
   });
 
-  it("reste muette et en ligne, sinon iOS passe en plein écran", () => {
+  it("joue le MP4 quand il n'y a aucune planche", () => {
     const { container } = render(
-      <StorySlideshow panels={panels} currentMs={0} videoUrl="https://x/v.mp4" />
+      <StorySlideshow panels={[]} currentMs={0} videoUrl="https://x/v.mp4" />
     );
-    const video = container.querySelector("video")!;
-    expect(video.muted).toBe(true);
-    expect(video.getAttribute("playsinline")).not.toBeNull();
+    const video = container.querySelector("video");
+    expect(video).not.toBeNull();
+    // Muted and inline, sinon iOS bascule en plein écran ou refuse la lecture.
+    expect(video!.muted).toBe(true);
+    expect(video!.getAttribute("playsinline")).not.toBeNull();
   });
 
   it("affiche les planches seules quand il n'y a pas de vidéo", () => {
@@ -55,6 +62,14 @@ describe("StorySlideshow", () => {
   it("ne rend rien quand il n'y a ni vidéo ni planche", () => {
     const { container } = render(<StorySlideshow panels={[]} currentMs={0} />);
     expect(container.firstChild).toBeNull();
+  });
+
+  it("anime les planches, puisqu'elles ne sont plus cachées sous une vidéo", () => {
+    const { container } = render(
+      <StorySlideshow panels={panels} currentMs={500} videoUrl="https://x/v.mp4" />
+    );
+    const img = container.querySelector("img") as HTMLElement;
+    expect(img.style.transform).toContain("scale(");
   });
 
   it("montre la légende du moment, pas toute la transcription", () => {
