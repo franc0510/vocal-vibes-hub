@@ -64,16 +64,33 @@ const StorySlideshow = ({
     setVideoFailed(false);
   }, [videoUrl]);
 
+  // Play and pause follow the recording; they must not be re-issued on every
+  // frame. This effect used to depend on currentMs, so it called play() around
+  // sixty times a second — and iOS aborts a play() whose predecessor is still
+  // pending, which is one of the two reasons the picture froze on its poster.
+  const playPendingRef = useRef(false);
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
 
-    const drift = Math.abs(video.currentTime * 1000 - currentMs);
-    if (drift > SYNC_TOLERANCE_MS) video.currentTime = currentMs / 1000;
-
-    if (isPlaying && video.paused) video.play().catch(() => { /* autoplay refused */ });
+    if (isPlaying && video.paused && !playPendingRef.current) {
+      playPendingRef.current = true;
+      video.play().catch(() => { /* refused; the panels carry the story */ })
+        .finally(() => { playPendingRef.current = false; });
+    }
     if (!isPlaying && !video.paused) video.pause();
-  }, [currentMs, isPlaying, videoUrl]);
+  }, [isPlaying, videoUrl]);
+
+  // Seeking is separate, and only when the video has actually drifted. Writing
+  // currentTime every frame — the second reason — restarts the seek before the
+  // previous one finishes, so playback never gets going.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoUrl || video.seeking) return;
+    if (Math.abs(video.currentTime * 1000 - currentMs) > SYNC_TOLERANCE_MS) {
+      video.currentTime = currentMs / 1000;
+    }
+  }, [currentMs, videoUrl]);
 
   const index = useMemo(() => panelIndexAt(panels, currentMs), [panels, currentMs]);
   const panel = index >= 0 ? panels[index] : undefined;
@@ -88,7 +105,19 @@ const StorySlideshow = ({
     img.src = next.image_url;
   }, [panels, index]);
 
-  const showVideo = Boolean(videoUrl) && !videoFailed;
+  /**
+   * The panels win whenever they exist.
+   *
+   * In the app they are the better rendering: plain images driven by the audio
+   * position, so they pan, cross-fade and scrub identically on every platform,
+   * and the captions stay live text rather than pixels. The MP4 brought nothing
+   * here that the panels do not — only a video element that can refuse to start
+   * and leave a frozen poster over a story that was working underneath.
+   *
+   * The file still matters: it is what leaves the app when an anecdote is
+   * shared. It is played here only when there are no panels to play instead.
+   */
+  const showVideo = Boolean(videoUrl) && !videoFailed && panels.length === 0;
   if (!showVideo && !panel) return null;
 
   const span = panel ? Math.max(1, panel.end_ms - panel.start_ms) : 1;
@@ -138,7 +167,6 @@ const StorySlideshow = ({
           muted
           playsInline
           preload="auto"
-          poster={panels[0]?.image_url}
           onError={() => setVideoFailed(true)}
           className="absolute inset-0 w-full h-full object-cover"
         />
