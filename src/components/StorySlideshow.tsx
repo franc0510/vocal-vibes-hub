@@ -16,6 +16,15 @@ interface StorySlideshowProps {
   videoUrl?: string | null;
   /** Whether the post's audio is playing, so the video can follow it. */
   isPlaying?: boolean;
+  /**
+   * Whether this anecdote is the one on screen.
+   *
+   * The feed keeps several posts mounted at once for smooth scrolling, so all
+   * of them used to fetch every panel — five stories of a dozen images each,
+   * competing for the connection the visible one needed. An inactive anecdote
+   * now shows its first panel and nothing more.
+   */
+  isActive?: boolean;
   /** Timestamped speech, for the caption overlay. */
   segments?: TimedSegment[] | null;
   className?: string;
@@ -28,6 +37,7 @@ const StorySlideshow = ({
   currentMs,
   videoUrl,
   isPlaying = false,
+  isActive = true,
   segments,
   className = "",
   overlay,
@@ -83,15 +93,42 @@ const StorySlideshow = ({
   const index = useMemo(() => panelIndexAt(panels, currentMs), [panels, currentMs]);
   const panel = index >= 0 ? panels[index] : undefined;
 
-  // Keep the next panel warm so the crossfade never lands on a blank frame.
+  /**
+   * Panels that have finished decoding, by URL.
+   *
+   * Nothing is shown before it is in here. A panel drawn while still
+   * downloading is a white rectangle, which is what the reader saw whenever
+   * the connection lagged behind the voice.
+   */
+  const [ready, setReady] = useState<Set<string>>(() => new Set());
+  const markReady = (url: string) =>
+    setReady((prev) => (prev.has(url) ? prev : new Set(prev).add(url)));
+
+  // Warm several panels ahead rather than one. One panel of lead time is about
+  // four seconds — less than a large image needs on a phone connection.
+  const PRELOAD_AHEAD = 3;
   const preloadedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const next = panels[index + 1];
-    if (!next || preloadedRef.current.has(next.image_url)) return;
-    preloadedRef.current.add(next.image_url);
-    const img = new Image();
-    img.src = next.image_url;
-  }, [panels, index]);
+    if (!isActive) return;
+    for (let i = Math.max(0, index); i <= index + PRELOAD_AHEAD; i++) {
+      const p = panels[i];
+      if (!p || preloadedRef.current.has(p.image_url)) continue;
+      preloadedRef.current.add(p.image_url);
+      const img = new Image();
+      img.onload = () => markReady(p.image_url);
+      img.src = p.image_url;
+      if (img.complete) markReady(p.image_url);
+    }
+  }, [panels, index, isActive]);
+
+  /**
+   * The panel actually painted: the target once it has decoded, otherwise the
+   * last one that had. Holding the previous picture is always better than
+   * flashing white on the way to the next.
+   */
+  const shownRef = useRef<IllustrationPanel | null>(null);
+  if (panel && ready.has(panel.image_url)) shownRef.current = panel;
+  const shown = (panel && ready.has(panel.image_url) ? panel : shownRef.current) ?? panel;
 
   /**
    * The panels win whenever they exist.
@@ -105,7 +142,7 @@ const StorySlideshow = ({
    * The file still matters: it is what leaves the app when an anecdote is
    * shared. It is played here only when there are no panels to play instead.
    */
-  const showVideo = Boolean(videoUrl) && !videoFailed && panels.length === 0;
+  const showVideo = Boolean(videoUrl) && !videoFailed && panels.length === 0 && isActive;
   if (!showVideo && !panel) return null;
 
   return (
@@ -117,19 +154,25 @@ const StorySlideshow = ({
         never loaded. Drawing the panel underneath means there is always a
         picture, and a video that fails simply reveals the slideshow.
       */}
-      {panel && (
+      {shown && (
         <AnimatePresence initial={false}>
           <motion.img
-            key={panel.id}
-            src={panel.image_url}
-            alt={panel.caption ?? ""}
+            key={shown.id}
+            src={shown.image_url}
+            alt={shown.caption ?? ""}
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            // Held at zero until the bytes are in: fading in a picture that is
+            // still downloading is how a half-drawn panel reaches the screen.
+            animate={{ opacity: ready.has(shown.image_url) ? 1 : 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0.15 : 0.6, ease: "easeInOut" }}
             className="absolute inset-0 w-full h-full object-cover"
             style={{ willChange: "opacity" }}
             draggable={false}
+            onLoad={() => markReady(shown.image_url)}
+            // Marks the very first panel ready when it comes from the browser
+            // cache, where no load event fires.
+            ref={(el) => { if (el?.complete) markReady(shown.image_url); }}
           />
         </AnimatePresence>
       )}
