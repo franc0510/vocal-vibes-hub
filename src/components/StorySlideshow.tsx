@@ -5,18 +5,6 @@ import { panelIndexAt } from "@/lib/slideshow";
 import type { TimedSegment } from "@/lib/captions";
 import LiveCaption from "./LiveCaption";
 
-/** Alternating pan directions, so consecutive panels don't drift the same way. */
-const PAN_DIRECTIONS: [number, number][] = [
-  [-1, -1],
-  [1, -1],
-  [-1, 1],
-  [1, 1],
-  [0, -1],
-  [0, 1],
-];
-
-const ZOOM_RANGE = 0.09;
-const PAN_PERCENT = 2.4;
 /** Beyond this the video is visibly out of step and worth a correcting seek. */
 const SYNC_TOLERANCE_MS = 250;
 
@@ -120,20 +108,6 @@ const StorySlideshow = ({
   const showVideo = Boolean(videoUrl) && !videoFailed && panels.length === 0;
   if (!showVideo && !panel) return null;
 
-  const span = panel ? Math.max(1, panel.end_ms - panel.start_ms) : 1;
-  const through = panel
-    ? Math.min(1, Math.max(0, (currentMs - panel.start_ms) / span))
-    : 0;
-
-  const [dirX, dirY] = PAN_DIRECTIONS[Math.max(0, index) % PAN_DIRECTIONS.length];
-  // Driven by audio position rather than a self-running animation, so the
-  // movement pauses, resumes and scrubs exactly with the voice. Skipped under
-  // the video, where nobody would see it.
-  const transform =
-    reduceMotion || showVideo
-      ? undefined
-      : `scale(${1 + ZOOM_RANGE * through}) translate(${dirX * PAN_PERCENT * through}%, ${dirY * PAN_PERCENT * through}%)`;
-
   return (
     <div className={`absolute inset-0 overflow-hidden ${className}`}>
       {/*
@@ -154,7 +128,7 @@ const StorySlideshow = ({
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0.15 : 0.6, ease: "easeInOut" }}
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform, willChange: "transform, opacity" }}
+            style={{ willChange: "opacity" }}
             draggable={false}
           />
         </AnimatePresence>

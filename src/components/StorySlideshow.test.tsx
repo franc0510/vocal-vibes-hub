@@ -64,12 +64,14 @@ describe("StorySlideshow", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("anime les planches, puisqu'elles ne sont plus cachées sous une vidéo", () => {
+  it("n'applique aucun zoom ni panoramique à la planche", () => {
+    // The Ken Burns drift was distracting more than it was atmospheric. The
+    // fade between panels stays; the panel itself is left alone.
     const { container } = render(
       <StorySlideshow panels={panels} currentMs={500} videoUrl="https://x/v.mp4" />
     );
     const img = container.querySelector("img") as HTMLElement;
-    expect(img.style.transform).toContain("scale(");
+    expect(img.style.transform).toBe("");
   });
 
   it("montre la légende du moment, pas toute la transcription", () => {
