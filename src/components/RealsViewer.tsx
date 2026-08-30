@@ -304,6 +304,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
           currentMs={currentMs}
           videoUrl={post.video_url}
           isPlaying={isPlaying}
+          isActive={isActive}
           segments={post.transcription_segments}
           className="z-0"
           overlay={

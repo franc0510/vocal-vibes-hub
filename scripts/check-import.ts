@@ -185,6 +185,50 @@ async function probeStar(url: string, key: string, label: string) {
   }
 }
 
+/**
+ * How heavy the panels are, and whether Supabase can serve them smaller.
+ *
+ * The slideshow downloads one image per panel while the voice plays, so their
+ * size is the loading time. Supabase can resize on the fly through /render/,
+ * but only on plans where image transformation is enabled — so it is probed
+ * rather than assumed: a HEAD on a transformed URL either answers or does not.
+ */
+async function auditPanelWeight(url: string, key: string) {
+  const panels = (await query(
+    url,
+    key,
+    "post_illustrations?select=image_url&limit=8"
+  )) as { image_url: string }[];
+
+  if (panels.length === 0) {
+    console.log("\n═══ Poids des planches ═══\n  aucune planche à mesurer.");
+    return;
+  }
+
+  console.log(`\n═══ Poids des planches (${panels.length} mesurées) ═══`);
+  let total = 0;
+  for (const p of panels) {
+    const res = await fetch(p.image_url, { method: "HEAD" });
+    const bytes = Number(res.headers.get("content-length") ?? 0);
+    total += bytes;
+  }
+  const avgKb = Math.round(total / panels.length / 1024);
+  console.log(`  poids moyen : ${avgKb} Ko`);
+  console.log(`  une anecdote de 12 planches pèse donc ~${Math.round((avgKb * 12) / 1024)} Mo`);
+
+  // Same object, asked for at display size through the transformation endpoint.
+  const sample = panels[0].image_url;
+  const transformed = sample.replace("/object/public/", "/render/image/public/") + "?width=828&quality=72";
+  const res = await fetch(transformed, { method: "HEAD" });
+  if (!res.ok) {
+    console.log(`  ⚠️  redimensionnement à la volée indisponible (HTTP ${res.status})`);
+    console.log("     il faudra réencoder les fichiers eux-mêmes.");
+    return;
+  }
+  const small = Number(res.headers.get("content-length") ?? 0);
+  console.log(`  ✅ redimensionnement disponible : ${Math.round(small / 1024)} Ko à 828 px`);
+}
+
 /** Is the stored file actually served? A URL in the row proves nothing. */
 async function reachable(url: string): Promise<string> {
   try {
@@ -439,6 +483,7 @@ async function main() {
   if (service) {
     await auditSchema(url, service);
     await auditBuckets(url, service);
+    await auditPanelWeight(url, anon);
     await auditNotifications(url, service);
   }
 
