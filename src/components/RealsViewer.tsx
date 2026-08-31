@@ -40,6 +40,19 @@ const formatTime = (dateStr: string) => {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
+/**
+ * Labels that sit directly on the illustration.
+ *
+ * They used to be muted grey, which reads against the app's own background but
+ * disappears over a bright panel — and the panel is what fills this screen.
+ * White carries across dark and light pictures alike, and the shadow is what
+ * keeps it legible over a pale one, where white alone would vanish just as
+ * surely as the grey did.
+ */
+const OVER_IMAGE = "text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.75)]";
+/** Same shadow, for the labels whose colour carries a meaning worth keeping. */
+const OVER_IMAGE_SHADOW = "[text-shadow:0_1px_3px_rgb(0_0_0/0.75)]";
+
 // Pre-warm an audio element (load without playing)
 const preloadAudio = (url: string): HTMLAudioElement => {
   const audio = new Audio();
@@ -458,7 +471,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
           </motion.div>
           <span
             onClick={(e) => { e.stopPropagation(); onLikeCountPress?.(); }}
-            className={`text-[10px] font-medium ${liked ? "text-primary" : "text-muted-foreground"} underline`}
+            className={`text-[10px] font-semibold underline ${liked ? `text-primary ${OVER_IMAGE_SHADOW}` : OVER_IMAGE}`}
           >
             {formatCount(likeCount)}
           </span>
@@ -468,14 +481,14 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
           <div className="w-11 h-11 rounded-full bg-card/60 backdrop-blur-sm border border-border/30 flex items-center justify-center">
             <MessageCircle size={22} className="text-foreground" />
           </div>
-          <span className="text-[10px] text-muted-foreground font-medium">{formatCount(commentCount)}</span>
+          <span className={`text-[10px] font-semibold ${OVER_IMAGE}`}>{formatCount(commentCount)}</span>
         </button>
 
         <button onClick={onShareOpen} className="flex flex-col items-center gap-1">
           <div className="w-11 h-11 rounded-full bg-card/60 backdrop-blur-sm border border-border/30 flex items-center justify-center">
             <Share2 size={22} className="text-foreground" />
           </div>
-          <span className="text-[10px] text-muted-foreground font-medium">Share</span>
+          <span className={`text-[10px] font-semibold ${OVER_IMAGE}`}>Share</span>
         </button>
 
         {user && user.id === post.user_id && (
@@ -483,7 +496,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
             <div className="w-11 h-11 rounded-full bg-destructive/20 backdrop-blur-sm border border-destructive/30 flex items-center justify-center">
               <Trash2 size={20} className="text-destructive" />
             </div>
-            <span className="text-[10px] text-destructive font-medium">Delete</span>
+            <span className={`text-[10px] text-destructive font-semibold ${OVER_IMAGE_SHADOW}`}>Delete</span>
           </button>
         )}
 
@@ -492,7 +505,7 @@ const RealItem = ({ post, onCommentsOpen, onShareOpen, onDelete, onReport, onEnd
             <div className="w-11 h-11 rounded-full bg-red-500/20 backdrop-blur-sm border border-red-500/30 flex items-center justify-center">
               <Flag size={20} className="text-red-500" />
             </div>
-            <span className="text-[10px] text-red-500 font-medium">Report</span>
+            <span className={`text-[10px] text-red-500 font-semibold ${OVER_IMAGE_SHADOW}`}>Report</span>
           </button>
         )}
       </div>
