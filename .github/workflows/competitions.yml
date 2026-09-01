@@ -1,0 +1,138 @@
+name: Lancer une compétition
+
+# Monte un défi et lit son classement sans terminal, depuis le téléphone.
+#
+#   Actions → Lancer une compétition → Run workflow
+#
+# Trois choses possibles :
+#   - poser les modèles      : à faire une fois, après avoir passé le SQL
+#   - créer une compétition  : monte les jours, les thèmes et les équipes
+#   - lire le classement     : les deux tableaux, à tout moment
+#
+# Le SQL doit être passé AVANT le premier lancement :
+#   scripts/sql/appliquer-competitions.sql → Supabase → SQL Editor → Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Que faire"
+        required: true
+        default: poser les modèles
+        type: choice
+        options:
+          - poser les modèles
+          - créer une compétition
+          - lire le classement
+      nom:
+        description: "Nom — pour « créer »"
+        required: false
+        default: ""
+      proprietaire:
+        description: "Identifiant du compte qui pilote — pour « créer »"
+        required: false
+        default: ""
+      modele:
+        description: "Modèle — pour « créer »"
+        required: false
+        default: inter-ecoles
+        type: choice
+        options:
+          - inter-ecoles
+          - mariage
+          - seminaire
+          - entre-amis
+      debut:
+        description: "Premier jour, AAAA-MM-JJ — pour « créer ». Vide = aujourd'hui."
+        required: false
+        default: ""
+      equipes:
+        description: "Équipes séparées par des virgules — pour « créer ». Vide = solo."
+        required: false
+        default: ""
+      lot:
+        description: "Le lot — pour « créer »"
+        required: false
+        default: ""
+      visibilite:
+        description: "Visibilité — pour « créer »"
+        required: false
+        default: private
+        type: choice
+        options:
+          - private
+          - public
+      id:
+        description: "Identifiant de la compétition — pour « lire le classement »"
+        required: false
+        default: ""
+
+jobs:
+  competition:
+    name: Compétition
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+
+    steps:
+      - name: Vérifier le secret
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY manquante — la table des modèles n'a aucune politique d'écriture."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Agir
+        env:
+          IN_ACTION: ${{ inputs.action }}
+          IN_NOM: ${{ inputs.nom }}
+          IN_PROPRIETAIRE: ${{ inputs.proprietaire }}
+          IN_MODELE: ${{ inputs.modele }}
+          IN_DEBUT: ${{ inputs.debut }}
+          IN_EQUIPES: ${{ inputs.equipes }}
+          IN_LOT: ${{ inputs.lot }}
+          IN_VISIBILITE: ${{ inputs.visibilite }}
+          IN_ID: ${{ inputs.id }}
+        run: |
+          case "$IN_ACTION" in
+            "poser les modèles")
+              npx tsx scripts/lancer-competition.ts modeles
+              ;;
+            "créer une compétition")
+              ARGS=(creer --nom "$IN_NOM" --proprietaire "$IN_PROPRIETAIRE" --modele "$IN_MODELE" --visibilite "$IN_VISIBILITE")
+              [ -n "$IN_DEBUT" ]   && ARGS+=(--debut "$IN_DEBUT")
+              [ -n "$IN_EQUIPES" ] && ARGS+=(--equipes "$IN_EQUIPES")
+              [ -n "$IN_LOT" ]     && ARGS+=(--lot "$IN_LOT")
+              npx tsx scripts/lancer-competition.ts "${ARGS[@]}"
+              ;;
+            "lire le classement")
+              npx tsx scripts/lancer-competition.ts classement --id "$IN_ID"
+              ;;
+            *)
+              echo "::error::Action inconnue : $IN_ACTION"
+              exit 1
+              ;;
+          esac
+
+      - name: Récapitulatif
+        if: always()
+        run: |
+          {
+            echo "### ${{ inputs.action }}"
+            echo ""
+            echo "Le code d'une compétition privée s'affiche dans le journal du travail"
+            echo "ci-dessus — c'est lui qui ouvre la compétition, sans lui personne n'entre."
+          } >> "$GITHUB_STEP_SUMMARY"

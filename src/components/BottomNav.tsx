@@ -1,4 +1,4 @@
-import { Home, Mic, User, Search, Crown } from "lucide-react";
+import { Home, Mic, User, Search, Trophy } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -8,7 +8,7 @@ const BottomNav = () => {
 
   const leftItems = [
     { icon: Home, label: "Feed", path: "/" },
-    { icon: Crown, label: "Weekly", path: "/weekly" },
+    { icon: Trophy, label: "Défis", path: "/competitions" },
   ];
 
   const rightItems = [

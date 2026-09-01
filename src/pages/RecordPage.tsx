@@ -2,40 +2,31 @@ import { useState, useEffect, useRef } from "react";
 import { supportedRecorderMime, recordedMime } from "@/lib/recorderMime";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Square, Send, Loader2, MicOff, AlertCircle, Settings, Image as ImageIcon, MapPin, Play, Pause, Trash2, X, Sparkles } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import WaveformVisualizer from "@/components/WaveformVisualizer";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useMicrophone } from "@/hooks/useMicrophone";
 import { useGroups, type Group } from "@/hooks/useGroups";
+import { useTodayTheme } from "@/hooks/useTodayTheme";
 import { transcribeAudio } from "@/services/transcriptionService";
 import { measureAudioDurationMs, resolveDurationMs } from "@/lib/audioDuration";
 
 const MAX_DURATION = 120;
 
 // Daily topics (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-const DAILY_TOPICS: Record<number, string> = {
-  1: "Your most fun moment from last week?",
-  2: "Your most embarrassing moment?",
-  3: "Your biggest shine moment?",
-  4: "The funniest story about a friend?",
-  5: "The funniest party story?",
-  6: "Your juiciest anecdote — Saturday's night!",
-  0: "What's your Sunday ritual?",
-};
-
-const getTodayTopic = () => {
-  const day = new Date().getDay();
-  return DAILY_TOPICS[day] || "Tell us your best anecdote!";
-};
-
 
 const RecordPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { status: micStatus, error: micError, requestAccess, stream: micStream } = useMicrophone(true); // autoRequest = true
   const { groups } = useGroups();
+  // Le thème du jour vient de la base. Le lien « Raconter la mienne » depuis
+  // l'écran d'une compétition en désigne un ; sans lui on prend celui de la
+  // compétition où l'on joue.
+  const [searchParams] = useSearchParams();
+  const { active: todayTheme } = useTodayTheme(searchParams.get("competitionDay"));
   
   const [isRecording, setIsRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -272,6 +263,12 @@ const RecordPage = () => {
         image_url: imageUrl,
         location: location.trim() || null,
         ...(visibility === "group" && selectedGroupId ? { group_id: selectedGroupId } : {}),
+        // Le jour est stocké sur l'anecdote, pas déduit de sa date : ça règle
+        // le fuseau horaire et la publication à 00h05. Cette colonne n'entre
+        // dans aucun filtre du feed — une anecdote de compétition doit être vue
+        // par tout le monde, y compris par ceux qui n'y participent pas. C'est
+        // là tout l'intérêt du défi.
+        ...(todayTheme ? { competition_day_id: todayTheme.dayId } : {}),
       } as any).select().single();
       if (insertError) throw insertError;
 
@@ -350,10 +347,17 @@ const RecordPage = () => {
         </motion.button>
       )}
 
-      <div className="gradient-red-soft rounded-xl px-3 py-2 mb-2 border border-primary/10 shrink-0">
-        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Today's topic</p>
-        <p className="text-xs font-display font-bold text-foreground leading-snug">{getTodayTopic()}</p>
-      </div>
+      {/* Plus de thème du jour quand on ne participe à rien : les sept phrases
+          codées en dur qui étaient là s'affichaient en anglais et ne pouvaient
+          pas changer sans une publication sur l'App Store. */}
+      {todayTheme && (
+        <div className="gradient-red-soft rounded-xl px-3 py-2 mb-2 border border-primary/10 shrink-0">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+            {todayTheme.competitionName} · jour {todayTheme.dayIndex}
+          </p>
+          <p className="text-xs font-display font-bold text-foreground leading-snug">{todayTheme.theme}</p>
+        </div>
+      )}
 
       {/* Main recording area — fills remaining space with balanced layout */}
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 overflow-hidden">

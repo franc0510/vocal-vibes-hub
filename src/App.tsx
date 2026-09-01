@@ -18,6 +18,9 @@ import AuthPage from "@/pages/AuthPage";
 import SettingsPage from "@/pages/SettingsPage";
 import GroupsPage from "@/pages/GroupsPage";
 import WeeklyPage from "@/pages/WeeklyPage";
+import CompetitionsPage from "@/pages/CompetitionsPage";
+import CompetitionPage from "@/pages/CompetitionPage";
+import CompetitionEditPage from "@/pages/CompetitionEditPage";
 import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useDailyNotification } from "@/hooks/useDailyNotification";
@@ -117,6 +120,14 @@ const AppRoutes = () => {
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/groups" element={<ProtectedRoute><GroupsPage /></ProtectedRoute>} />
+            <Route path="/competitions" element={<ProtectedRoute><CompetitionsPage /></ProtectedRoute>} />
+            {/* Avant /competitions/:id, sinon « new » serait pris pour un identifiant. */}
+            <Route path="/competitions/new" element={<ProtectedRoute><CompetitionEditPage /></ProtectedRoute>} />
+            <Route path="/competitions/:competitionId" element={<ProtectedRoute><CompetitionPage /></ProtectedRoute>} />
+            <Route path="/competitions/:competitionId/edit" element={<ProtectedRoute><CompetitionEditPage /></ProtectedRoute>} />
+            {/* Weekly quitte la nav mais garde sa route : les votes déjà posés
+                dans vocme_votes ne sont pas perdus, seulement moins visibles,
+                le temps de le recréer comme compétition publique permanente. */}
             <Route path="/weekly" element={<ProtectedRoute><WeeklyPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
