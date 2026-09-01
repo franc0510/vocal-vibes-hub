@@ -129,6 +129,10 @@ CREATE TABLE IF NOT EXISTS public.competition_templates (
   name TEXT NOT NULL,
   description TEXT,
   uses_teams BOOLEAN NOT NULL DEFAULT true,
+  -- Les équipes proposées : « team mariée » et « team marié » pour un mariage,
+  -- rien pour une compétition solo. Sans elles, un modèle turnkey obligerait
+  -- quand même l'organisateur à tout retaper.
+  default_teams JSONB NOT NULL DEFAULT '[]'::jsonb,
   default_days JSONB NOT NULL DEFAULT '[]'::jsonb,
   default_scoring JSONB NOT NULL DEFAULT
     '{"members":1,"posts":5,"likes":1,"comments":2,"shares":3,"bonus":20}'::jsonb,
