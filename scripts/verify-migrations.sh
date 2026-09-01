@@ -162,6 +162,68 @@ q "DELETE FROM voice_posts WHERE id='$POST'" >/dev/null
 check "écoutes supprimées avec l'anecdote" "0" \
   "$(q "SELECT count(*) FROM listened_posts WHERE post_id='$POST'")"
 
+# Le moteur de compétitions. Ces règles gardent l'intégrité d'un défi doté d'un
+# lot : sans elles, on réécrit un thème après coup, on vote deux fois, ou on
+# rejoint l'équipe qui gagne la veille de la clôture.
+echo "▸ Compétitions"
+C_OWNER="$OWNER"
+C_MEMBER="$INTRUDER"
+C_OUT=$(q "INSERT INTO auth.users (id) VALUES (gen_random_uuid()) RETURNING id")
+
+PRIV=$(q "INSERT INTO competitions (owner_id,name,visibility,starts_on,ends_on) VALUES ('$C_OWNER','Privée','private',CURRENT_DATE,CURRENT_DATE+7) RETURNING id")
+PUB=$(q "INSERT INTO competitions (owner_id,name,visibility,starts_on,ends_on) VALUES ('$C_OWNER','Publique','public',CURRENT_DATE,CURRENT_DATE+7) RETURNING id")
+q "INSERT INTO competition_members (competition_id,user_id) VALUES ('$PRIV','$C_MEMBER'),('$PUB','$C_MEMBER'),('$PUB','$C_OWNER')" >/dev/null
+
+check "un membre voit la compétition privée" "1" \
+  "$(as authenticated "$C_MEMBER" "SELECT count(*) FROM competitions WHERE id='$PRIV';" 2>/dev/null)"
+check "un étranger ne voit pas la privée" "0" \
+  "$(as authenticated "$C_OUT" "SELECT count(*) FROM competitions WHERE id='$PRIV';" 2>/dev/null)"
+check "tout le monde voit la publique" "1" \
+  "$(as authenticated "$C_OUT" "SELECT count(*) FROM competitions WHERE id='$PUB';" 2>/dev/null)"
+
+PASTDAY=$(q "INSERT INTO competition_days (competition_id,day_index,theme,date) VALUES ('$PUB',1,'Hier',CURRENT_DATE-1) RETURNING id")
+FUTDAY=$(q "INSERT INTO competition_days (competition_id,day_index,theme,date) VALUES ('$PUB',2,'Demain',CURRENT_DATE+1) RETURNING id")
+as authenticated "$C_OWNER" "UPDATE competition_days SET theme='réécrit' WHERE id='$PASTDAY';" >/dev/null 2>&1 || true
+check "le thème d'un jour passé ne se réécrit pas" "Hier" "$(q "SELECT theme FROM competition_days WHERE id='$PASTDAY'")"
+as authenticated "$C_OWNER" "UPDATE competition_days SET theme='ajusté' WHERE id='$FUTDAY';" >/dev/null 2>&1 || true
+check "un jour à venir reste modifiable" "ajusté" "$(q "SELECT theme FROM competition_days WHERE id='$FUTDAY'")"
+as authenticated "$C_MEMBER" "UPDATE competition_days SET theme='pirate' WHERE id='$FUTDAY';" >/dev/null 2>&1 || true
+check "un simple membre ne touche pas aux thèmes" "ajusté" "$(q "SELECT theme FROM competition_days WHERE id='$FUTDAY'")"
+
+CPOST=$(q "INSERT INTO voice_posts (user_id,title,audio_url,duration,competition_day_id) VALUES ('$C_MEMBER','a','u',10,'$FUTDAY') RETURNING id")
+OFFPOST=$(q "INSERT INTO voice_posts (user_id,title,audio_url,duration) VALUES ('$C_MEMBER','hors','u',10) RETURNING id")
+
+as authenticated "$C_OWNER" "INSERT INTO competition_votes (competition_id,day_id,voter_id,post_id) VALUES ('$PUB','$FUTDAY','$C_OWNER','$CPOST');" >/dev/null 2>&1 || true
+check "un membre vote une fois" "1" "$(q "SELECT count(*) FROM competition_votes WHERE day_id='$FUTDAY'")"
+as authenticated "$C_OWNER" "INSERT INTO competition_votes (competition_id,day_id,voter_id,post_id) VALUES ('$PUB','$FUTDAY','$C_OWNER','$CPOST');" >/dev/null 2>&1 || true
+check "deux votes le même jour refusés" "1" "$(q "SELECT count(*) FROM competition_votes WHERE day_id='$FUTDAY'")"
+as authenticated "$C_OUT" "INSERT INTO competition_votes (competition_id,day_id,voter_id,post_id) VALUES ('$PUB','$FUTDAY','$C_OUT','$CPOST');" >/dev/null 2>&1 || true
+check "un non-membre ne vote pas" "1" "$(q "SELECT count(*) FROM competition_votes WHERE day_id='$FUTDAY'")"
+as authenticated "$C_MEMBER" "INSERT INTO competition_votes (competition_id,day_id,voter_id,post_id) VALUES ('$PUB','$FUTDAY','$C_MEMBER','$OFFPOST');" >/dev/null 2>&1 || true
+check "voter pour une anecdote d'un autre jour refusé" "1" "$(q "SELECT count(*) FROM competition_votes WHERE day_id='$FUTDAY'")"
+
+DONE=$(q "INSERT INTO competitions (owner_id,name,visibility,starts_on,ends_on) VALUES ('$C_OWNER','Finie','public',CURRENT_DATE-10,CURRENT_DATE-1) RETURNING id")
+as authenticated "$C_OUT" "INSERT INTO competition_members (competition_id,user_id) VALUES ('$DONE','$C_OUT');" >/dev/null 2>&1 || true
+check "on ne rejoint pas une compétition finie" "0" "$(q "SELECT count(*) FROM competition_members WHERE competition_id='$DONE'")"
+
+TEAM_A=$(q "INSERT INTO competition_teams (competition_id,name) VALUES ('$PUB','Rouge') RETURNING id")
+TEAM_B=$(q "INSERT INTO competition_teams (competition_id,name) VALUES ('$PUB','Bleue') RETURNING id")
+as authenticated "$C_MEMBER" "UPDATE competition_members SET team_id='$TEAM_A' WHERE competition_id='$PUB' AND user_id='$C_MEMBER';" >/dev/null 2>&1 || true
+check "on choisit son équipe tant qu'on n'a pas marqué" "Rouge" \
+  "$(q "SELECT t.name FROM competition_members m JOIN competition_teams t ON t.id=m.team_id WHERE m.user_id='$C_MEMBER' AND m.competition_id='$PUB'")"
+q "UPDATE competition_members SET locked_at=now() WHERE competition_id='$PUB' AND user_id='$C_MEMBER'" >/dev/null
+as authenticated "$C_MEMBER" "UPDATE competition_members SET team_id='$TEAM_B' WHERE competition_id='$PUB' AND user_id='$C_MEMBER';" >/dev/null 2>&1 || true
+check "une fois verrouillé, on ne change plus d'équipe" "Rouge" \
+  "$(q "SELECT t.name FROM competition_members m JOIN competition_teams t ON t.id=m.team_id WHERE m.user_id='$C_MEMBER' AND m.competition_id='$PUB'")"
+
+as authenticated "$C_MEMBER" "INSERT INTO competition_templates (key,name) VALUES ('pirate','Pirate');" >/dev/null 2>&1 || true
+check "personne ne crée de modèle" "0" "$(q "SELECT count(*) FROM competition_templates WHERE key='pirate'")"
+
+# Une notification système n'a pas d'auteur ; actor_id doit l'accepter.
+q "INSERT INTO notifications (user_id,type) VALUES ('$C_OWNER','competition_day')" >/dev/null 2>&1
+check "une notification système passe sans auteur" "1" \
+  "$(q "SELECT count(*) FROM notifications WHERE type='competition_day'")"
+
 echo
 if [ "$failures" -eq 0 ]; then
   echo "✅ Tout est bon."
