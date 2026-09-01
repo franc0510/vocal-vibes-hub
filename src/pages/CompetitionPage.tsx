@@ -4,8 +4,11 @@ import { motion } from "framer-motion";
 import {
   ChevronLeft, Trophy, Users, Mic, Settings, Sparkles, Share2, Crown, Check,
 } from "lucide-react";
+import CompetitionDayBallot from "@/components/CompetitionDayBallot";
+import { DEFAULT_TIMEZONE, formatCountdown, msUntilRollover } from "@/lib/competitionClock";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompetition } from "@/hooks/useCompetition";
 import { useCompetitions } from "@/hooks/useCompetitions";
@@ -36,9 +39,11 @@ const CompetitionPage = () => {
     isOwner, isMember, isOver, loading, chooseTeam,
   } = useCompetition(competitionId);
   const { join } = useCompetitions();
-  const { players, teams: teamScores, pending, final } = useCompetitionScores(competitionId);
+  const { players, teams: teamScores, final } = useCompetitionScores(competitionId);
+  const timezone = competition?.timezone ?? DEFAULT_TIMEZONE;
 
   const [profiles, setProfiles] = useState<Map<string, Profile>>(new Map());
+  const [myPostToday, setMyPostToday] = useState<string | null>(null);
   const [tab, setTab] = useState<"teams" | "players">("teams");
   const [onlyMyTeam, setOnlyMyTeam] = useState(false);
 
@@ -46,6 +51,29 @@ const CompetitionPage = () => {
   useEffect(() => {
     if (teams.length === 0) setTab("players");
   }, [teams.length]);
+
+  /**
+   * Mon anecdote du jour, s'il y en a une.
+   *
+   * C'est ce qui referme la boucle enregistrement → défi : sans elle, on
+   * publie et l'écran de la compétition reste identique, si bien qu'on
+   * republie en croyant que ça n'a pas marché.
+   */
+  useEffect(() => {
+    if (!currentDay || !user) { setMyPostToday(null); return; }
+    let cancelled = false;
+    db.from("voice_posts")
+      .select("id")
+      .eq("competition_day_id", currentDay.id)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }: { data: { id: string } | null }) => {
+        if (!cancelled) setMyPostToday(data?.id ?? null);
+      });
+    return () => { cancelled = true; };
+  }, [currentDay, user]);
 
   useEffect(() => {
     const ids = players.map((p) => p.user_id);
@@ -130,12 +158,25 @@ const CompetitionPage = () => {
             </p>
             <p className="text-lg font-bold mt-1 leading-snug">{currentDay.theme}</p>
             {isMember && (
-              <button
-                onClick={() => navigate(`/record?competitionDay=${currentDay.id}`)}
-                className="mt-3 w-full bg-primary-foreground/15 backdrop-blur rounded-xl py-2.5 font-medium text-sm flex items-center justify-center gap-2"
-              >
-                <Mic size={16} /> Raconter la mienne
-              </button>
+              <>
+                <button
+                  onClick={() => navigate(`/record?competitionDay=${currentDay.id}`)}
+                  className="mt-3 w-full bg-primary-foreground/15 backdrop-blur rounded-xl py-2.5 font-medium text-sm flex items-center justify-center gap-2"
+                >
+                  <Mic size={16} />
+                  {myPostToday ? "En raconter une autre" : "Raconter la mienne"}
+                </button>
+                {/* La boucle se referme ici : on voit que sa propre anecdote
+                    est bien partie, sans avoir à la chercher dans le feed. */}
+                {myPostToday && (
+                  <button
+                    onClick={() => navigate(`/post/${myPostToday}`)}
+                    className="mt-2 w-full text-[11px] opacity-90 flex items-center justify-center gap-1.5"
+                  >
+                    <Check size={12} /> Ton anecdote du jour est en lice
+                  </button>
+                )}
+              </>
             )}
           </motion.div>
         ) : (
@@ -144,7 +185,10 @@ const CompetitionPage = () => {
               {isOver ? "Compétition terminée" : `Départ le ${competition.starts_on}`}
             </p>
             {competition.prize && (
-              <p className="text-xs text-muted-foreground mt-1">🏆 {competition.prize}</p>
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                <Trophy size={12} className="text-amber-400 shrink-0" />
+                <span className="min-w-0 break-words">{competition.prize}</span>
+              </p>
             )}
           </div>
         )}
@@ -200,15 +244,29 @@ const CompetitionPage = () => {
           </section>
         )}
 
+        {/* L'urne du jour — écouter, puis élire. */}
+        <CompetitionDayBallot
+          competitionId={competitionId}
+          days={days}
+          currentDay={currentDay}
+          timezone={timezone}
+          isMember={isMember}
+          onRecord={currentDay ? () => navigate(`/record?competitionDay=${currentDay.id}`) : undefined}
+        />
+
         {/* Les classements. */}
         <section>
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground min-w-0 truncate">
               Classement
             </h2>
-            {!final && pending > 0 && (
-              <span className="text-[11px] text-amber-400 flex items-center gap-1">
-                <Sparkles size={11} /> + {pending} bonus à venir
+            {/* Le bonus du jour est le seul point encore en jeu : les autres
+                sont déjà comptés. Annoncer l'heure du dépouillement vaut mieux
+                qu'un total mystérieux « à venir ». */}
+            {!final && currentDay && (
+              <span className="text-[11px] text-amber-400 flex items-center gap-1 shrink-0">
+                <Sparkles size={11} /> Bonus du jour dans{" "}
+                {formatCountdown(msUntilRollover(new Date(), timezone))}
               </span>
             )}
           </div>

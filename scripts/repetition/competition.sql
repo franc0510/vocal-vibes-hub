@@ -61,3 +61,54 @@ INSERT INTO voice_post_shares (user_id,post_id)
 SELECT (SELECT id FROM auth.users ORDER BY id LIMIT 1 OFFSET (g-1)), p.id
 FROM voice_posts p JOIN ids ON ids.id=p.user_id, generate_series(1, ids.n % 2) g
 WHERE p.competition_day_id IS NOT NULL;
+
+-- ------------------------------------------------------------
+-- Le scrutin.
+--
+-- Le jour 1 est dépouillé (il date d'hier, l'urne s'est scellée à 4 h), le
+-- jour 2 court encore. C'est le seul endroit qui prouve que la vue distingue
+-- les deux : un bonus crédité pour le jour en cours voudrait dire qu'un
+-- classement affiché le matin peut changer l'après-midi.
+--
+-- Volontairement une ÉGALITÉ en tête du jour 1 : les joueurs 1 et 2 recueillent
+-- deux voix chacun. La règle est que les ex æquo gagnent TOUS — un bonus n'est
+-- qu'un nombre, le retirer à deux personnes pour cause de coïncidence les
+-- punirait d'un hasard. La vue et la formule doivent s'accorder là-dessus.
+-- ------------------------------------------------------------
+
+WITH ids AS (SELECT id, row_number() OVER (ORDER BY id) n FROM auth.users),
+     -- L'anecdote du jour 1 de chaque joueur : titre « a<n>-1 ».
+     j1 AS (
+       SELECT p.id AS post_id, ids.n
+       FROM voice_posts p JOIN ids ON ids.id = p.user_id
+       WHERE p.competition_day_id = 'dddddddd-0000-0000-0000-000000000001'
+     ),
+     bulletins(voteur, pour) AS (
+       VALUES (4,1), (5,1),   -- deux voix pour le joueur 1
+              (6,2), (7,2),   -- deux voix pour le joueur 2 : égalité en tête
+              (8,3)           -- une seule pour le joueur 3
+     )
+INSERT INTO competition_votes (competition_id, day_id, voter_id, post_id)
+SELECT 'cccccccc-0000-0000-0000-00000000000c',
+       'dddddddd-0000-0000-0000-000000000001',
+       v.id, j1.post_id
+FROM bulletins b
+JOIN ids v ON v.n = b.voteur
+JOIN j1 ON j1.n = b.pour;
+
+-- Le jour en cours : des voix bien réelles, qui ne doivent créditer personne
+-- tant que l'urne n'est pas scellée.
+WITH ids AS (SELECT id, row_number() OVER (ORDER BY id) n FROM auth.users),
+     j2 AS (
+       SELECT p.id AS post_id, ids.n
+       FROM voice_posts p JOIN ids ON ids.id = p.user_id
+       WHERE p.competition_day_id = 'dddddddd-0000-0000-0000-000000000002'
+       AND ids.n = 9
+       LIMIT 1
+     )
+INSERT INTO competition_votes (competition_id, day_id, voter_id, post_id)
+SELECT 'cccccccc-0000-0000-0000-00000000000c',
+       'dddddddd-0000-0000-0000-000000000002',
+       v.id, j2.post_id
+FROM ids v, j2
+WHERE v.n IN (1, 2, 3);

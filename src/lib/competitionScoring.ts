@@ -20,7 +20,7 @@ export interface ScoringWeights {
   likes: number;
   comments: number;
   shares: number;
-  /** Meilleure anecdote d'un jour. Attribué à la clôture, pas avant. */
+  /** Meilleure anecdote d'un jour. Attribué au dépouillement, à 4 h. */
   bonus: number;
 }
 
@@ -41,7 +41,10 @@ export interface PlayerTally {
   likes: number;
   comments: number;
   shares: number;
-  /** Jours dont ce joueur a remporté la meilleure anecdote. */
+  /**
+   * Jours DÉPOUILLÉS dont ce joueur a remporté la meilleure anecdote. Le jour
+   * en cours n'y figure jamais : ses voix peuvent encore changer.
+   */
   day_wins?: number;
 }
 
@@ -90,14 +93,19 @@ export function weightsFrom(raw: unknown): ScoringWeights {
 /**
  * Le score d'un joueur.
  *
- * `countBonus` est faux tant que la compétition court : les bonus « meilleure
- * anecdote du jour » tombent à la clôture. Le classement peut donc basculer au
- * dernier moment — c'est voulu, et l'écran l'annonce d'avance.
+ * `day_wins` ne compte que des jours DÉPOUILLÉS — l'urne se scelle à 4 h le
+ * lendemain, et la vue SQL n'en rapporte pas d'autres. Un bonus porté au
+ * classement est donc acquis, et `countBonus` vaut vrai pour le classement en
+ * direct : le tableau bouge chaque matin à heure fixe, ce qui fait rouvrir
+ * l'application bien mieux qu'un total figé pendant six jours.
+ *
+ * Le drapeau reste, à faux, pour ce qu'il sert encore : simuler un barème sans
+ * ses bonus, et vérifier en test qu'un terme pèse bien ce qu'on croit.
  */
 export function scorePlayer(
   tally: PlayerTally,
   weights: ScoringWeights,
-  countBonus = false
+  countBonus = true
 ): number {
   const wins = countBonus ? tally.day_wins ?? 0 : 0;
   return (
@@ -108,11 +116,6 @@ export function scorePlayer(
     weights.shares * tally.shares +
     weights.bonus * wins
   );
-}
-
-/** Bonus encore à distribuer — ce que l'écran affiche en « + N à venir ». */
-export function pendingBonuses(tallies: PlayerTally[]): number {
-  return tallies.reduce((total, t) => total + (t.day_wins ?? 0), 0);
 }
 
 /**
@@ -136,7 +139,7 @@ function ranked<T extends { score: number }>(rows: T[]): (T & { rank: number })[
 export function rankPlayers(
   tallies: PlayerTally[],
   weights: ScoringWeights,
-  countBonus = false
+  countBonus = true
 ): PlayerScore[] {
   return ranked(
     tallies.map((t) => ({
@@ -217,9 +220,10 @@ export interface FinalStandings {
 /**
  * Gèle le résultat.
  *
- * Bonus compris, cette fois — c'est le moment où ils comptent. Sans ce gel, un
- * like posté trois semaines plus tard changerait rétroactivement le vainqueur
- * d'une soirée déjà offerte.
+ * Sans ce gel, un like posté trois semaines plus tard changerait
+ * rétroactivement le vainqueur d'une soirée déjà offerte. Les bonus des jours
+ * dépouillés y sont, comme dans le classement en direct : le gel photographie
+ * l'état du moment, il ne le recalcule pas autrement.
  *
  * En cas d'égalité au sommet, aucun vainqueur n'est désigné : mieux vaut un
  * champ vide, que l'organisateur tranche, qu'un gagnant choisi par l'ordre

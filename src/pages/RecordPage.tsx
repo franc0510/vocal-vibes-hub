@@ -275,6 +275,8 @@ const RecordPage = () => {
       toast.success(
         wantVideo
           ? "Publié ! On dessine ton anecdote, on te prévient 🎨"
+          : todayTheme
+          ? "Publié ! Ton anecdote est en lice pour aujourd'hui."
           : "Published! 🎉"
       );
       setTitle(""); setAudioBlob(null); setElapsed(0); setWantVideo(false);
@@ -292,7 +294,15 @@ const RecordPage = () => {
         });
       }
       
-      navigate("/");
+      /**
+       * Retour au défi, et pas au feed, quand l'anecdote en est une.
+       *
+       * C'est la boucle qui manquait : on partait de la compétition, on
+       * publiait, et on atterrissait dans le feed sans aucun signe que le coup
+       * avait porté — au point de republier pour en avoir le cœur net. Le défi
+       * montre l'anecdote dans l'urne du jour, prête à être écoutée et votée.
+       */
+      navigate(todayTheme ? `/competitions/${todayTheme.competitionId}` : "/");
     } catch (err: any) { toast.error(err.message || "Failed to publish"); }
     finally { setPublishing(false); }
   };

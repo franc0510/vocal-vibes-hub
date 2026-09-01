@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { db } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
 import { TEMPLATES, fromTemplate, type CompetitionTemplate } from "@/lib/competitionTemplates";
+import { competitionDate, DEFAULT_TIMEZONE } from "@/lib/competitionClock";
+import { DEFAULT_WEIGHTS, type ScoringWeights } from "@/lib/competitionScoring";
 
 /**
  * La liste des compétitions : les miennes, les publiques ouvertes, et la
@@ -20,6 +22,8 @@ export interface Competition {
   visibility: "public" | "private";
   starts_on: string;
   ends_on: string;
+  /** Le fuseau qui décide des jours. En base depuis le début, jamais lu. */
+  timezone: string;
   join_code: string | null;
   template_key: string | null;
   closed_at: string | null;
@@ -27,7 +31,15 @@ export interface Competition {
   final_standings: unknown | null;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+/**
+ * La date du jour pour la liste, sans compétition sous la main.
+ *
+ * On ne connaît pas encore le fuseau de chacune, alors on prend celui du
+ * défaut : ce filtre-ci ne sert qu'à écarter les compétitions terminées depuis
+ * longtemps, et une heure d'écart n'en cache aucune. Les écrans qui décident
+ * vraiment d'un jour, eux, lisent `competition.timezone`.
+ */
+const listDate = () => competitionDate(new Date(), DEFAULT_TIMEZONE);
 
 /** Un code court, lisible au téléphone : ni 0/O ni 1/I. */
 const makeJoinCode = () => {
@@ -71,7 +83,7 @@ export const useCompetitions = () => {
         .from("competitions")
         .select("*")
         .eq("visibility", "public")
-        .gte("ends_on", today())
+        .gte("ends_on", listDate())
         .order("starts_on", { ascending: true });
       const joinedIds = new Set(joined.map((c) => c.id));
       setOpen(((publics ?? []) as Competition[]).filter((c) => !joinedIds.has(c.id)));
@@ -98,6 +110,8 @@ export const useCompetitions = () => {
       template?: CompetitionTemplate | null;
       teams?: { name: string; color: string }[];
       days?: { day_index: number; theme: string }[];
+      /** Le barème choisi à la création. Après le départ, il est gelé. */
+      scoring?: ScoringWeights;
     }) => {
       if (!user) throw new Error("Il faut être connecté pour créer une compétition.");
       const template = input.template ?? null;
@@ -122,7 +136,10 @@ export const useCompetitions = () => {
           starts_on: input.startsOn.toISOString().slice(0, 10),
           // La durée n'est pas un réglage : c'est le nombre de jours.
           ends_on: dated[dated.length - 1].date,
-          scoring: seed?.scoring ?? undefined,
+          // L'écran de création propose déjà un barème, pré-rempli depuis le
+          // modèle : c'est lui qui fait foi, le modèle n'étant qu'un point de
+          // départ. Sans écran (script, API), on retombe sur le modèle.
+          scoring: input.scoring ?? seed?.scoring ?? DEFAULT_WEIGHTS,
           template_key: template?.key ?? null,
           // Une privée sans code ne se partage que nommément ; en donner un
           // coûte une colonne et évite d'inviter cinquante personnes à la main.

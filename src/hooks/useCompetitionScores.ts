@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/integrations/supabase/untyped";
 import {
-  rankPlayers, rankTeams, weightsFrom, pendingBonuses,
+  rankPlayers, rankTeams, weightsFrom,
   type PlayerScore, type TeamScore, type PlayerTally,
 } from "@/lib/competitionScoring";
 
@@ -23,9 +23,7 @@ import {
 export interface Standings {
   players: PlayerScore[];
   teams: TeamScore[];
-  /** Bonus « meilleure anecdote du jour » encore à distribuer. */
-  pending: number;
-  /** Vrai une fois la compétition close : les bonus sont alors comptés. */
+  /** Vrai une fois la compétition close : le classement gelé est servi tel quel. */
   final: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -38,7 +36,6 @@ interface ScoreRow extends PlayerTally {
 export const useCompetitionScores = (competitionId: string | undefined): Standings => {
   const [players, setPlayers] = useState<PlayerScore[]>([]);
   const [teams, setTeams] = useState<TeamScore[]>([]);
-  const [pending, setPending] = useState(0);
   const [final, setFinal] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -58,7 +55,6 @@ export const useCompetitionScores = (competitionId: string | undefined): Standin
       if (comp?.closed_at && comp.final_standings) {
         setPlayers(comp.final_standings.players ?? []);
         setTeams(comp.final_standings.teams ?? []);
-        setPending(0);
         setFinal(true);
         return;
       }
@@ -80,11 +76,13 @@ export const useCompetitionScores = (competitionId: string | undefined): Standin
       // Le classement est rejoué ici plutôt que lu tel quel de la vue : c'est
       // la même formule, mais elle nous donne les rangs, les égalités et la
       // somme par équipe sans un second aller-retour.
+      // Les bonus comptent : la vue ne rapporte que des jours DÉPOUILLÉS,
+      // donc acquis. Les retenir jusqu'à la clôture afficherait un classement
+      // que personne ne pourrait vérifier contre l'urne de la veille.
       const weights = weightsFrom(comp?.scoring);
-      const ranked = rankPlayers(rows, weights, false);
+      const ranked = rankPlayers(rows, weights, true);
       setPlayers(ranked);
       setTeams(rankTeams(ranked));
-      setPending(pendingBonuses(rows));
       setFinal(false);
     } finally {
       setLoading(false);
@@ -100,6 +98,11 @@ export const useCompetitionScores = (competitionId: string | undefined): Standin
    * commentaires : ce sont eux qui font bouger un classement pendant une
    * soirée, et rafraîchir seulement à l'arrivée d'un membre laisserait
    * l'écran figé pendant des heures.
+   *
+   * Le dépouillement de 4 h, lui, n'émet aucun événement : il ne s'écrit nulle
+   * part, la vue le déduit de l'heure. Le bonus du matin apparaît donc à la
+   * première lecture qui suit — l'ouverture de l'écran, ou le premier like de
+   * la journée.
    */
   useEffect(() => {
     if (!competitionId) return;
@@ -113,5 +116,5 @@ export const useCompetitionScores = (competitionId: string | undefined): Standin
     return () => { supabase.removeChannel(channel); };
   }, [competitionId, refresh]);
 
-  return { players, teams, pending, final, loading, refresh };
+  return { players, teams, final, loading, refresh };
 };

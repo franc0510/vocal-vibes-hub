@@ -5,6 +5,7 @@ import { Trophy, Plus, Users, Calendar, KeyRound, ChevronRight } from "lucide-re
 import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { useCompetitions, type Competition } from "@/hooks/useCompetitions";
+import { competitionDate, DEFAULT_TIMEZONE } from "@/lib/competitionClock";
 
 /**
  * L'écran d'accueil des compétitions — celui qui remplace Weekly dans la nav.
@@ -20,7 +21,9 @@ const dayCount = (c: Competition) => {
 };
 
 const statusOf = (c: Competition) => {
-  const today = new Date().toISOString().slice(0, 10);
+  // Dans le fuseau de la compétition, et avec la bascule à 4 h : une soirée
+  // qui court encore à 2 h du matin ne doit pas s'afficher « Terminée ».
+  const today = competitionDate(new Date(), c.timezone ?? DEFAULT_TIMEZONE);
   if (c.closed_at || c.ends_on < today) return { label: "Terminée", tone: "text-muted-foreground" };
   if (c.starts_on > today) {
     const days = Math.round((new Date(c.starts_on).getTime() - Date.now()) / 86400000);
@@ -42,12 +45,17 @@ const CompetitionCard = ({ competition, onOpen }: { competition: Competition; on
       </div>
       <div className="min-w-0 flex-1">
         <p className="font-semibold text-foreground truncate">{competition.name}</p>
-        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground min-w-0">
           <span className={status.tone}>{status.label}</span>
           <span className="flex items-center gap-1">
             <Calendar size={11} />{dayCount(competition)} jours
           </span>
-          {competition.prize && <span className="truncate">🏆 {competition.prize}</span>}
+          {competition.prize && (
+            <span className="flex items-center gap-1 min-w-0">
+              <Trophy size={11} className="text-amber-400 shrink-0" />
+              <span className="truncate">{competition.prize}</span>
+            </span>
+          )}
         </div>
       </div>
       <ChevronRight size={18} className="text-muted-foreground shrink-0" />
@@ -148,12 +156,12 @@ const CompetitionsPage = () => {
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="ABC123"
               maxLength={6}
-              className="flex-1 bg-card border border-border/40 rounded-xl px-4 py-2.5 text-foreground tracking-[0.2em] font-mono uppercase placeholder:tracking-normal placeholder:font-sans"
+              className="flex-1 min-w-0 bg-card border border-border/40 rounded-xl px-4 py-2.5 text-foreground tracking-[0.2em] font-mono uppercase placeholder:tracking-normal placeholder:font-sans"
             />
             <button
               onClick={joinByCode}
               disabled={joining || code.length < 4}
-              className="px-5 rounded-xl gradient-red text-primary-foreground font-medium text-sm disabled:opacity-40"
+              className="px-5 shrink-0 rounded-xl gradient-red text-primary-foreground font-medium text-sm disabled:opacity-40"
             >
               Rejoindre
             </button>

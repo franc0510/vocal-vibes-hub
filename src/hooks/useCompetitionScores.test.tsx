@@ -59,10 +59,9 @@ describe("useCompetitionScores", () => {
 
     expect(result.current.final).toBe(true);
     expect(result.current.players[0].score).toBe(46);
-    expect(result.current.pending).toBe(0);
   });
 
-  it("recalcule tant que la compétition court, bonus non compris", async () => {
+  it("recalcule tant que la compétition court, bonus des jours dépouillés compris", async () => {
     rows.competition = {
       scoring: { members: 1, posts: 5, likes: 1, comments: 2, shares: 3, bonus: 20 },
       closed_at: null,
@@ -77,10 +76,11 @@ describe("useCompetitionScores", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.final).toBe(false);
-    // 1 + 5 + 2 = 8, sans les 20 du bonus : il tombera à la clôture.
-    expect(result.current.players[0].score).toBe(8);
-    expect(result.current.pending).toBe(1);
+    // 1 + 5 + 2 + 20 = 28. La vue ne rapporte un `day_wins` qu'une fois l'urne
+    // scellée à 4 h, donc ce bonus est acquis : le retenir jusqu'à la clôture
+    // afficherait un classement que personne ne pourrait recouper.
+    expect(result.current.players[0].score).toBe(28);
     // L'équipe est la somme de ses joueurs, jamais un second calcul.
-    expect(result.current.teams[0].score).toBe(9);
+    expect(result.current.teams[0].score).toBe(29);
   });
 });
