@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { orderFeed, isIllustrated, countToReveal } from "@/lib/feedOrder";
 import { parseSegments, type TimedSegment } from "@/lib/captions";
+import type { Database } from "@/integrations/supabase/types";
 
 export interface VoicePostWithAuthor {
   id: string;
@@ -69,6 +70,25 @@ const FEED_COLUMNS = [
   "video_status",
 ].join(",");
 
+/**
+ * Ce que le feed lit réellement, ligne par ligne.
+ *
+ * `FEED_COLUMNS` est un `join(",")`, donc de type `string` et non un littéral :
+ * le parseur de types de Supabase ne peut pas en déduire les colonnes et
+ * retombe sur `GenericStringError`. Chaque accès à `p.id`, `p.user_id`,
+ * `p.likes_count`… échouait alors à la compilation — quinze erreurs pour une
+ * seule cause. Nommer le type ici les règle toutes ensemble, et rend les accès
+ * vraiment typés plutôt que muets.
+ *
+ * `group_id` est ajouté à la main : la colonne existe en base depuis la
+ * migration des groupes, mais `types.ts` n'a pas été régénéré depuis. C'est le
+ * seul écart, et il disparaîtra le jour où on régénère les types — auquel cas
+ * cette intersection deviendra redondante sans rien casser.
+ */
+type FeedRow = Database["public"]["Tables"]["voice_posts"]["Row"] & {
+  group_id: string | null;
+};
+
 const CACHE_KEY = "vocme_feed_cache_v2";
 const STALE_CACHE_KEYS = ["vocme_feed_cache_v1"];
 
@@ -123,10 +143,13 @@ export const useVoicePosts = () => {
   const fetchPosts = async () => {
     setLoading(true);
 
-    const { data: postsData, error } = await supabase
+    const { data, error } = await supabase
       .from("voice_posts")
       .select(FEED_COLUMNS)
       .order("created_at", { ascending: false });
+    // La requête part avec une liste de colonnes construite à l'exécution, que
+    // le typage de Supabase ne sait pas suivre : on lui dit ce qu'elle rend.
+    const postsData = data as unknown as FeedRow[] | null;
 
     if (error || !postsData) {
       // Was a silent early return. On a device still holding a cache, that
