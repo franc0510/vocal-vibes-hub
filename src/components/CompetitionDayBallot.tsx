@@ -66,15 +66,15 @@ const CompetitionDayBallot = ({
     try {
       if (myVote === postId) {
         await clearVote();
-        toast("Voix retirée");
+        toast("Vote withdrawn");
       } else {
         await castVote(postId);
-        toast.success("Voix comptée !");
+        toast.success("Vote counted!");
       }
     } catch (err) {
       // Le message de la base est déjà explicite : on ne vote pas pour soi, ni
       // sur une urne scellée.
-      toast.error(err instanceof Error ? err.message : "Vote refusé.");
+      toast.error(err instanceof Error ? err.message : "Vote refused.");
     }
   };
 
@@ -83,15 +83,15 @@ const CompetitionDayBallot = ({
       <div className="flex items-center justify-between mb-2 gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 min-w-0">
           <Vote size={12} className="shrink-0" />
-          <span className="truncate">Les anecdotes du jour</span>
+          <span className="truncate">Today's stories</span>
         </h2>
         {isOpen ? (
           <span className="text-[11px] text-muted-foreground shrink-0">
-            Dépouillement dans {countdown}
+            Results in {countdown}
           </span>
         ) : isSettled ? (
           <span className="text-[11px] text-amber-400 flex items-center gap-1 shrink-0">
-            <Lock size={10} /> Dépouillé
+            <Lock size={10} /> Counted
           </span>
         ) : null}
       </div>
@@ -111,7 +111,7 @@ const CompetitionDayBallot = ({
                     : "border-border/40 text-muted-foreground"
                 }`}
               >
-                Jour {d.day_index}
+                Day {d.day_index}
               </button>
             );
           })}
@@ -121,16 +121,16 @@ const CompetitionDayBallot = ({
       <p className="text-[11px] text-muted-foreground mb-2 truncate">{day.theme}</p>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">Chargement…</p>
+        <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
       ) : entries.length === 0 ? (
         <div className="text-center py-8 px-4 rounded-xl border border-dashed border-border/50">
-          <p className="text-sm text-foreground font-medium">Aucune anecdote pour ce jour</p>
+          <p className="text-sm text-foreground font-medium">No stories for this day</p>
           {isOpen && isMember && onRecord && (
             <button
               onClick={onRecord}
               className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-full gradient-red text-primary-foreground text-sm font-medium"
             >
-              <Mic size={14} /> Ouvrir le bal
+              <Mic size={14} /> Be the first
             </button>
           )}
         </div>
@@ -163,7 +163,7 @@ const CompetitionDayBallot = ({
                     <p className="text-sm font-medium text-foreground truncate">{entry.title}</p>
                   </button>
                   <p className="text-[11px] text-muted-foreground truncate">
-                    {entry.isMine ? "Toi" : entry.authorName}
+                    {entry.isMine ? "You" : entry.authorName}
                   </p>
                 </div>
 
@@ -181,7 +181,7 @@ const CompetitionDayBallot = ({
                       chosen ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
                     }`}
                   >
-                    {chosen ? "Ma voix" : "Voter"}
+                    {chosen ? "My vote" : "Vote"}
                   </button>
                 )}
               </motion.div>
@@ -193,10 +193,10 @@ const CompetitionDayBallot = ({
       {entries.length > 0 && (
         <p className="text-[11px] text-muted-foreground mt-2">
           {isSettled
-            ? `${totalVotes} voix · la meilleure anecdote a empoché son bonus.`
+            ? `${totalVotes} vote(s) · the best story took the bonus.`
             : isOpen
-            ? `${totalVotes} voix · le bonus tombe au dépouillement, dans ${countdown}.`
-            : `${totalVotes} voix.`}
+            ? `${totalVotes} vote(s) · the bonus lands when votes are counted, in ${countdown}.`
+            : `${totalVotes} vote(s).`}
         </p>
       )}
     </section>

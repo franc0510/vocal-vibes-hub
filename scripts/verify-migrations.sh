@@ -211,21 +211,37 @@ check "un jour à venir reste modifiable" "ajusté" "$(q "SELECT theme FROM comp
 as authenticated "$C_MEMBER" "UPDATE competition_days SET theme='pirate' WHERE id='$FUTDAY';" >/dev/null 2>&1 || true
 check "un simple membre ne touche pas aux thèmes" "ajusté" "$(q "SELECT theme FROM competition_days WHERE id='$FUTDAY'")"
 
-# --- L'équipe, AVANT de marquer : le verrou ne doit pas encore être posé.
+# --- L'équipe se choisit UNE FOIS, et le verrou tombe à cet instant.
+#
+#     Avant, `locked_at` était lu par la politique RLS, par le hook et par
+#     l'écran… et écrit nulle part : le verrou n'existait pas. Il tombait
+#     ensuite à la première anecdote publiée, ce qui laissait encore changer de
+#     camp tant qu'on n'avait rien publié — donc jusqu'à connaître le gagnant.
 TEAM_A=$(q "INSERT INTO competition_teams (competition_id,name) VALUES ('$PUB','Rouge') RETURNING id")
 TEAM_B=$(q "INSERT INTO competition_teams (competition_id,name) VALUES ('$PUB','Bleue') RETURNING id")
-as authenticated "$C_MEMBER" "UPDATE competition_members SET team_id='$TEAM_A' WHERE competition_id='$PUB' AND user_id='$C_MEMBER';" >/dev/null 2>&1 || true
-check "on choisit son équipe tant qu'on n'a pas marqué" "Rouge" \
-  "$(q "SELECT t.name FROM competition_members m JOIN competition_teams t ON t.id=m.team_id WHERE m.user_id='$C_MEMBER' AND m.competition_id='$PUB'")"
 
-# --- Le verrou : il était LU partout et ÉCRIT nulle part, donc inexistant.
-#     Il tombe désormais à la première anecdote publiée sous un thème du défi.
-TPOST_M=$(q "INSERT INTO voice_posts (user_id,title,audio_url,duration,competition_day_id) VALUES ('$C_MEMBER','Mienne','u',10,'$TODAYDAY') RETURNING id")
-check "publier pose le verrou d'équipe" "posé" \
+check "entré sans équipe, on n'est pas encore verrouillé" "absent" \
+  "$(q "SELECT CASE WHEN locked_at IS NULL THEN 'absent' ELSE 'posé' END FROM competition_members WHERE user_id='$C_MEMBER' AND competition_id='$PUB'")"
+as authenticated "$C_MEMBER" "UPDATE competition_members SET team_id='$TEAM_A' WHERE competition_id='$PUB' AND user_id='$C_MEMBER';" >/dev/null 2>&1 || true
+check "on choisit son camp une première fois" "Rouge" \
+  "$(q "SELECT t.name FROM competition_members m JOIN competition_teams t ON t.id=m.team_id WHERE m.user_id='$C_MEMBER' AND m.competition_id='$PUB'")"
+check "choisir son camp pose le verrou sur-le-champ" "posé" \
   "$(q "SELECT CASE WHEN locked_at IS NULL THEN 'absent' ELSE 'posé' END FROM competition_members WHERE user_id='$C_MEMBER' AND competition_id='$PUB'")"
 as authenticated "$C_MEMBER" "UPDATE competition_members SET team_id='$TEAM_B' WHERE competition_id='$PUB' AND user_id='$C_MEMBER';" >/dev/null 2>&1 || true
 check "une fois verrouillé, on ne change plus d'équipe" "Rouge" \
   "$(q "SELECT t.name FROM competition_members m JOIN competition_teams t ON t.id=m.team_id WHERE m.user_id='$C_MEMBER' AND m.competition_id='$PUB'")"
+
+# Rejoindre EN choisissant son camp : le chemin normal depuis l'écran, et le
+# seul moment où le choix est vraiment libre. Le verrou doit tomber à l'entrée.
+C_JOINER=$(q "INSERT INTO auth.users (id) VALUES (gen_random_uuid()) RETURNING id")
+as authenticated "$C_JOINER" "INSERT INTO competition_members (competition_id,user_id,team_id) VALUES ('$PUB','$C_JOINER','$TEAM_B');" >/dev/null 2>&1 || true
+check "rejoindre avec son camp verrouille à l'inscription" "posé" \
+  "$(q "SELECT CASE WHEN locked_at IS NULL THEN 'absent' ELSE 'posé' END FROM competition_members WHERE user_id='$C_JOINER' AND competition_id='$PUB'")"
+as authenticated "$C_JOINER" "UPDATE competition_members SET team_id='$TEAM_A' WHERE competition_id='$PUB' AND user_id='$C_JOINER';" >/dev/null 2>&1 || true
+check "et ne laisse plus changer ensuite" "Bleue" \
+  "$(q "SELECT t.name FROM competition_members m JOIN competition_teams t ON t.id=m.team_id WHERE m.user_id='$C_JOINER' AND m.competition_id='$PUB'")"
+
+TPOST_M=$(q "INSERT INTO voice_posts (user_id,title,audio_url,duration,competition_day_id) VALUES ('$C_MEMBER','Mienne','u',10,'$TODAYDAY') RETURNING id")
 
 # --- Le vote du jour : une voix, sur l'urne ouverte, et jamais pour soi.
 TPOST_2=$(q "INSERT INTO voice_posts (user_id,title,audio_url,duration,competition_day_id) VALUES ('$C_MEMBER2','Autre','u',10,'$TODAYDAY') RETURNING id")
@@ -308,6 +324,14 @@ check "un simple membre ne crée pas d'équipe" "0" "$(q "SELECT count(*) FROM c
 as authenticated "$C_OWNER" "DELETE FROM competition_teams WHERE id='$TEAM_A';" >/dev/null 2>&1 || true
 check "supprimer une équipe laisse ses joueurs en solo" "1" \
   "$(q "SELECT count(*) FROM competition_members WHERE user_id='$C_MEMBER' AND competition_id='$PUB' AND team_id IS NULL")"
+
+# --- Le code d'invitation : garanti par la base, pas par le client.
+#     Il n'était donné qu'aux privées, si bien qu'une publique n'avait rien à
+#     partager — et il n'était affiché nulle part.
+check "une compétition publique reçoit un code" "6" \
+  "$(q "SELECT coalesce(length(join_code),0) FROM competitions WHERE id='$PUB'")"
+check "les codes sont uniques" "0" \
+  "$(q "SELECT count(*) FROM (SELECT join_code FROM competitions WHERE join_code IS NOT NULL GROUP BY join_code HAVING count(*)>1) x")"
 
 as authenticated "$C_MEMBER" "INSERT INTO competition_templates (key,name) VALUES ('pirate','Pirate');" >/dev/null 2>&1 || true
 check "personne ne crée de modèle" "0" "$(q "SELECT count(*) FROM competition_templates WHERE key='pirate'")"

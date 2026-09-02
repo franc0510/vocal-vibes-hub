@@ -6,6 +6,8 @@ import {
   ballotIsOpen,
   msUntilRollover,
   formatCountdown,
+  instantAt,
+  themeIsRevealed,
 } from "./competitionClock";
 
 /**
@@ -170,5 +172,71 @@ describe("formatCountdown", () => {
 
   it("ne descend jamais sous zéro", () => {
     expect(formatCountdown(-10_000)).toBe("0 min");
+  });
+});
+
+describe("instantAt — l'heure murale d'un fuseau, ramenée à un instant", () => {
+  const PARIS_TZ = "Europe/Paris";
+
+  it("vise 9 h locale en hiver (Paris = UTC+1)", () => {
+    const at = instantAt("2026-01-15", 9, PARIS_TZ);
+    expect(at.toISOString()).toBe("2026-01-15T08:00:00.000Z");
+  });
+
+  it("vise 9 h locale en été (Paris = UTC+2)", () => {
+    const at = instantAt("2026-07-15", 9, PARIS_TZ);
+    expect(at.toISOString()).toBe("2026-07-15T07:00:00.000Z");
+  });
+
+  /**
+   * Le jour du changement d'heure : c'est là qu'un décalage codé en dur se
+   * trompe d'une heure, et qu'une notification arrive à 8 h ou à 10 h.
+   */
+  it("tient le jour du passage à l'heure d'été", () => {
+    // 2026-03-29 : Paris passe de UTC+1 à UTC+2 à 2 h du matin. À 9 h, on est
+    // déjà en heure d'été.
+    expect(instantAt("2026-03-29", 9, PARIS_TZ).toISOString()).toBe("2026-03-29T07:00:00.000Z");
+    // La veille, encore en heure d'hiver.
+    expect(instantAt("2026-03-28", 9, PARIS_TZ).toISOString()).toBe("2026-03-28T08:00:00.000Z");
+  });
+
+  it("tient le jour du passage à l'heure d'hiver", () => {
+    // 2026-10-25 : Paris repasse à UTC+1 à 3 h du matin.
+    expect(instantAt("2026-10-25", 9, PARIS_TZ).toISOString()).toBe("2026-10-25T08:00:00.000Z");
+    expect(instantAt("2026-10-24", 9, PARIS_TZ).toISOString()).toBe("2026-10-24T07:00:00.000Z");
+  });
+
+  it("suit le fuseau déclaré, pas celui du téléphone", () => {
+    expect(instantAt("2026-01-15", 9, "America/Los_Angeles").toISOString())
+      .toBe("2026-01-15T17:00:00.000Z");
+    expect(instantAt("2026-01-15", 9, "Asia/Tokyo").toISOString())
+      .toBe("2026-01-15T00:00:00.000Z");
+  });
+
+  /**
+   * La propriété qui rend 9 h sûr : l'heure visée existe toujours. Les
+   * bascules se jouent entre 2 h et 3 h ; à 9 h il n'y a jamais d'heure
+   * manquante ni d'heure jouée deux fois.
+   */
+  it("relit bien 9 h dans le fuseau, tous les jours d'une année", () => {
+    for (let d = 0; d < 365; d++) {
+      const date = new Date(Date.UTC(2026, 0, 1 + d)).toISOString().slice(0, 10);
+      const at = instantAt(date, 9, PARIS_TZ);
+      const readBack = new Intl.DateTimeFormat("en-US", {
+        timeZone: PARIS_TZ, hour: "2-digit", hourCycle: "h23",
+      }).format(at);
+      expect(`${date} → ${readBack}`).toBe(`${date} → 09`);
+    }
+  });
+});
+
+describe("themeIsRevealed", () => {
+  it("révèle le thème du jour et ceux d'avant", () => {
+    expect(themeIsRevealed("2026-01-15", "2026-01-15")).toBe(true);
+    expect(themeIsRevealed("2026-01-14", "2026-01-15")).toBe(true);
+  });
+
+  it("garde les jours à venir secrets", () => {
+    expect(themeIsRevealed("2026-01-16", "2026-01-15")).toBe(false);
   });
 });

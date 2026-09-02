@@ -165,3 +165,45 @@ export function formatCountdown(ms: number): string {
   const rest = minutes % 60;
   return rest === 0 ? `${hours} h` : `${hours} h ${String(rest).padStart(2, "0")}`;
 }
+
+/**
+ * L'instant absolu où il sera `hour`:00 le jour `dayDate`, dans `timezone`.
+ *
+ * L'inverse de `wallClock` : on cherche le point du temps dont l'heure murale
+ * vaut ce qu'on vise. C'est ce dont une notification planifiée a besoin — l'OS
+ * veut un instant, l'organisateur pense en heure locale, et entre les deux il y
+ * a un décalage qui change deux fois par an.
+ *
+ * On part de l'instant naïf, on regarde quelle heure il donne réellement dans
+ * le fuseau, et on corrige de l'écart. Une seule passe suffit : le décalage
+ * d'un fuseau ne varie que d'une heure, et la correction ne peut pas nous
+ * faire changer de régime pour une heure aussi éloignée des bascules.
+ */
+export function instantAt(
+  dayDate: string,
+  hour: number,
+  timezone: string = DEFAULT_TIMEZONE
+): Date {
+  const [year, month, day] = dayDate.split("-").map(Number);
+  const naive = Date.UTC(year, month - 1, day, hour, 0, 0);
+
+  const seen = wallClock(new Date(naive), timezone);
+  const seenMs = Date.UTC(seen.year, seen.month - 1, seen.day, seen.hour, seen.minute, seen.second);
+  const targetMs = Date.UTC(year, month - 1, day, hour, 0, 0);
+
+  return new Date(naive - (seenMs - targetMs));
+}
+
+/**
+ * Le thème de ce jour est-il révélé ?
+ *
+ * Un joueur découvre le thème le matin même : c'est ce qui fait rouvrir
+ * l'application, et ce qui empêche de préparer six anecdotes le premier soir.
+ * Les jours passés restent lisibles — leurs anecdotes sont déjà dans l'urne,
+ * sous leur thème, et les masquer créerait une incohérence à l'écran.
+ *
+ * L'organisateur, lui, voit tout : c'est lui qui écrit le programme.
+ */
+export function themeIsRevealed(dayDate: string, today: string): boolean {
+  return dayDate <= today;
+}

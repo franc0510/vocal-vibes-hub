@@ -85,11 +85,13 @@ export const useTodayTheme = (preferredDayId?: string | null) => {
   useEffect(() => { load(); }, [load]);
 
   /**
-   * Celui qu'on propose.
+   * Celui qu'on propose par défaut.
    *
-   * Le lien depuis l'écran d'une compétition en désigne un ; sinon on prend le
-   * premier. Jouer dans deux défis le même jour reste rare, et proposer un
-   * choix avant même d'avoir enregistré ajouterait un écran pour rien.
+   * Le lien depuis l'écran d'un défi en désigne un ; sinon on prend le premier.
+   * Ce n'est qu'une PROPOSITION : l'écran d'enregistrement la montre et permet
+   * d'en changer ou de la refuser. Auparavant elle s'appliquait en silence, si
+   * bien que le moindre enregistrement partait dans un défi choisi au hasard
+   * parmi ceux en cours, sans qu'on puisse s'y opposer.
    */
   const active =
     themes.find((t) => t.dayId === preferredDayId) ?? themes[0] ?? null;

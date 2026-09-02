@@ -89,7 +89,7 @@ export const useCompetitionDayVote = (
         setAuthors(
           new Map(
             ((data ?? []) as { id: string; display_name: string | null; avatar_url: string | null }[])
-              .map((p) => [p.id, { name: p.display_name ?? "Anonyme", avatar: p.avatar_url }])
+              .map((p) => [p.id, { name: p.display_name ?? "Anonymous", avatar: p.avatar_url }])
           )
         );
       } else {
@@ -149,10 +149,10 @@ export const useCompetitionDayVote = (
         return {
           postId: p.id,
           userId: p.user_id,
-          title: p.title ?? "Sans titre",
+          title: p.title ?? "Untitled",
           audioUrl: p.audio_url,
           imageUrl: p.image_url,
-          authorName: author?.name ?? "Anonyme",
+          authorName: author?.name ?? "Anonymous",
           authorAvatar: author?.avatar ?? null,
           votes: count,
           isWinner: isSettled && count > 0 && count === best,

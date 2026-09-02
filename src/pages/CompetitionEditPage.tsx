@@ -32,12 +32,12 @@ const field =
  * « qualité » a besoin de savoir lequel des six curseurs le fait.
  */
 const SCORING_FIELDS: { key: keyof ScoringWeights; label: string; hint: string }[] = [
-  { key: "members", label: "Point de présence", hint: "Par participant. C'est le seul terme qui récompense l'effectif." },
-  { key: "posts", label: "Anecdote publiée", hint: "Ce qui pousse à raconter plutôt qu'à regarder." },
-  { key: "likes", label: "Like reçu", hint: "La popularité brute d'une anecdote." },
-  { key: "comments", label: "Commentaire reçu", hint: "Plus rare qu'un like, donc en général plus lourd." },
-  { key: "shares", label: "Partage", hint: "Ce qui fait venir des gens de l'extérieur." },
-  { key: "bonus", label: "Meilleure anecdote du jour", hint: "Le bonus du vote, versé au dépouillement de 4 h." },
+  { key: "members", label: "Turnout point", hint: "Per player. The only term that rewards team size." },
+  { key: "posts", label: "Story posted", hint: "What pushes people to tell rather than watch." },
+  { key: "likes", label: "Like received", hint: "Raw popularity of a story." },
+  { key: "comments", label: "Comment received", hint: "Rarer than a like, so usually worth more." },
+  { key: "shares", label: "Share", hint: "What brings people in from outside." },
+  { key: "bonus", label: "Best story of the day", hint: "The vote bonus, paid out when votes are counted at 4am." },
 ];
 
 const CompetitionEditPage = () => {
@@ -47,7 +47,7 @@ const CompetitionEditPage = () => {
   const { create } = useCompetitions();
   const {
     competition, days: existingDays, teams: existingTeams, isOwner, canEditScoring,
-    loading, setTheme, update, addTeam, renameTeam, removeTeam,
+    loading, setTheme, update, addDay, addTeam, renameTeam, removeTeam,
   } = useCompetition(competitionId);
 
   /** La date de référence de l'écran, dans le fuseau de la compétition. */
@@ -64,6 +64,7 @@ const CompetitionEditPage = () => {
   const [startsOn, setStartsOn] = useState(competitionDate(new Date(), DEFAULT_TIMEZONE));
   const [scoring, setScoring] = useState<ScoringWeights>(DEFAULT_WEIGHTS);
   const [newTeam, setNewTeam] = useState("");
+  const [newDay, setNewDay] = useState("");
   const [themes, setThemes] = useState<string[]>([""]);
   const [teams, setTeams] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -93,7 +94,7 @@ const CompetitionEditPage = () => {
   }, [competition]);
 
   const save = async () => {
-    if (!name.trim()) { toast.error("Il faut un nom."); return; }
+    if (!name.trim()) { toast.error("It needs a name."); return; }
     setSaving(true);
     try {
       if (editing) {
@@ -107,12 +108,12 @@ const CompetitionEditPage = () => {
           // applique la même règle, par trigger.
           ...(canEditScoring ? { scoring } : {}),
         });
-        toast.success("Compétition mise à jour");
+        toast.success("Challenge updated");
         navigate(`/competitions/${competitionId}`);
         return;
       }
       const kept = themes.map((t) => t.trim()).filter(Boolean);
-      if (kept.length === 0) { toast.error("Il faut au moins un jour et son thème."); return; }
+      if (kept.length === 0) { toast.error("It needs at least one day and its theme."); return; }
       const created = await create({
         name: name.trim(),
         description: description.trim() || undefined,
@@ -127,10 +128,10 @@ const CompetitionEditPage = () => {
         days: kept.map((theme, i) => ({ day_index: i + 1, theme })),
         scoring,
       });
-      toast.success("Compétition créée !");
+      toast.success("Challenge created!");
       navigate(`/competitions/${created.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Impossible d'enregistrer.");
+      toast.error(err instanceof Error ? err.message : "Could not save.");
     } finally {
       setSaving(false);
     }
@@ -140,8 +141,8 @@ const CompetitionEditPage = () => {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-3 px-8 text-center">
         <Lock size={32} className="text-muted-foreground" />
-        <p className="text-foreground font-medium">Seul le créateur règle cette compétition</p>
-        <button onClick={() => navigate(-1)} className="text-primary text-sm font-medium">Retour</button>
+        <p className="text-foreground font-medium">Only the creator can set up this challenge</p>
+        <button onClick={() => navigate(-1)} className="text-primary text-sm font-medium">Back</button>
       </div>
     );
   }
@@ -153,10 +154,10 @@ const CompetitionEditPage = () => {
         <div className="flex items-center gap-2 px-3 py-3">
           <button onClick={() => navigate(-1)} className="p-1 text-foreground"><ChevronLeft size={22} /></button>
           <h1 className="flex-1 font-bold text-foreground">
-            {editing ? "Réglages" : "Nouvelle compétition"}
+            {editing ? "Settings" : "New challenge"}
           </h1>
           <button onClick={save} disabled={saving} className="text-primary font-medium text-sm disabled:opacity-40">
-            {saving ? "…" : "Enregistrer"}
+            {saving ? "…" : "Save"}
           </button>
         </div>
       </header>
@@ -165,7 +166,7 @@ const CompetitionEditPage = () => {
         {!editing && (
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-              Partir d'un modèle
+              Start from a template
             </h2>
             <div className="grid grid-cols-2 gap-2">
               {TEMPLATES.map((t) => (
@@ -178,7 +179,7 @@ const CompetitionEditPage = () => {
                 >
                   <p className="text-sm font-medium text-foreground">{t.name}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {t.default_days.length} jours · {t.uses_teams ? "en équipes" : "solo"}
+                    {t.default_days.length} days · {t.uses_teams ? "teams" : "solo"}
                   </p>
                 </button>
               ))}
@@ -187,8 +188,8 @@ const CompetitionEditPage = () => {
         )}
 
         <section className="space-y-2.5">
-          <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom de la compétition" />
-          <input className={field} value={prize} onChange={(e) => setPrize(e.target.value)} placeholder="Le lot — soirée bière/pizza…" />
+          <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Challenge name" />
+          <input className={field} value={prize} onChange={(e) => setPrize(e.target.value)} placeholder="The prize — beer and pizza night…" />
           <textarea className={`${field} h-20 resize-none`} value={description}
                     onChange={(e) => setDescription(e.target.value)} placeholder="Description" />
           {!editing && (
@@ -203,7 +204,7 @@ const CompetitionEditPage = () => {
                   visibility === v ? "border-primary text-primary bg-primary/10" : "border-border/40 text-muted-foreground"
                 }`}
               >
-                {v === "private" ? "Privée (sur code)" : "Publique"}
+                {v === "private" ? "Private (code only)" : "Public"}
               </button>
             ))}
           </div>
@@ -213,7 +214,7 @@ const CompetitionEditPage = () => {
         {/* Le barème — les six coefficients, réglables tant que rien n'est joué. */}
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
-            <Sparkles size={12} /> Le barème
+            <Sparkles size={12} /> Scoring
             {editing && !canEditScoring && <Lock size={12} className="shrink-0" />}
           </h2>
           <div className="space-y-2">
@@ -249,8 +250,8 @@ const CompetitionEditPage = () => {
           </div>
           <p className="text-[11px] text-muted-foreground mt-2">
             {editing && !canEditScoring
-              ? "Le barème est gelé depuis le départ : le changer maintenant rebattrait rétroactivement tout le classement."
-              : "Réglable jusqu'au départ. Après, il est gelé — un classement doté d'un lot ne se recalcule pas en cours de route."}
+              ? "Scoring is frozen since the challenge started — changing it now would retroactively reshuffle every standing."
+              : "Adjustable until the start. After that it is frozen — standings with a prize on the line are not recomputed mid-run."}
           </p>
         </section>
 
@@ -258,7 +259,7 @@ const CompetitionEditPage = () => {
           <>
             <section>
               <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                Équipes — laisse vide pour jouer chacun pour soi
+                Teams — leave empty for everyone-for-themselves
               </h2>
               <div className="space-y-2">
                 {teams.map((team, i) => (
@@ -267,7 +268,7 @@ const CompetitionEditPage = () => {
                       className={field}
                       value={team}
                       onChange={(e) => setTeams(teams.map((t, j) => (j === i ? e.target.value : t)))}
-                      placeholder={`Équipe ${i + 1}`}
+                      placeholder={`Team ${i + 1}`}
                     />
                     <button onClick={() => setTeams(teams.filter((_, j) => j !== i))}
                             className="px-3 text-muted-foreground"><Trash2 size={16} /></button>
@@ -275,14 +276,14 @@ const CompetitionEditPage = () => {
                 ))}
                 <button onClick={() => setTeams([...teams, ""])}
                         className="flex items-center gap-1.5 text-sm text-primary font-medium">
-                  <Plus size={15} /> Ajouter une équipe
+                  <Plus size={15} /> Add a team
                 </button>
               </div>
             </section>
 
             <section>
               <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                Un thème par jour — la durée, c'est leur nombre
+                One theme per day — the number of days is the length
               </h2>
               <div className="space-y-2">
                 {themes.map((theme, i) => (
@@ -292,7 +293,7 @@ const CompetitionEditPage = () => {
                       className={field}
                       value={theme}
                       onChange={(e) => setThemes(themes.map((t, j) => (j === i ? e.target.value : t)))}
-                      placeholder="Thème du jour"
+                      placeholder="Theme of the day"
                     />
                     <button onClick={() => setThemes(themes.filter((_, j) => j !== i))}
                             className="px-1 text-muted-foreground"><Trash2 size={16} /></button>
@@ -300,7 +301,7 @@ const CompetitionEditPage = () => {
                 ))}
                 <button onClick={() => setThemes([...themes, ""])}
                         className="flex items-center gap-1.5 text-sm text-primary font-medium">
-                  <Plus size={15} /> Ajouter un jour
+                  <Plus size={15} /> Add a day
                 </button>
               </div>
             </section>
@@ -313,7 +314,7 @@ const CompetitionEditPage = () => {
         {editing && (
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-              Les équipes
+              Teams
             </h2>
             <div className="space-y-2">
               {existingTeams.map((team) => (
@@ -328,10 +329,10 @@ const CompetitionEditPage = () => {
                     onBlur={async (e) => {
                       const value = e.target.value.trim();
                       if (!value || value === team.name) { e.target.value = team.name; return; }
-                      try { await renameTeam(team.id, value); toast.success("Équipe renommée"); }
+                      try { await renameTeam(team.id, value); toast.success("Team renamed"); }
                       catch (err) {
                         e.target.value = team.name;
-                        toast.error(err instanceof Error ? err.message : "Refusé");
+                        toast.error(err instanceof Error ? err.message : "Refused");
                       }
                     }}
                   />
@@ -341,11 +342,11 @@ const CompetitionEditPage = () => {
                       // ON DELETE SET NULL, donc personne n'est supprimé — ses
                       // joueurs repassent en solo, avec leurs points.
                       const ok = window.confirm(
-                        `Supprimer « ${team.name} » ? Ses joueurs repassent en solo et gardent leurs points.`
+                        `Remove "${team.name}"? Its players go solo and keep their points.`
                       );
                       if (!ok) return;
-                      try { await removeTeam(team.id); toast.success("Équipe supprimée"); }
-                      catch (err) { toast.error(err instanceof Error ? err.message : "Refusé"); }
+                      try { await removeTeam(team.id); toast.success("Team removed"); }
+                      catch (err) { toast.error(err instanceof Error ? err.message : "Refused"); }
                     }}
                     className="px-3 text-muted-foreground shrink-0"
                   >
@@ -359,7 +360,7 @@ const CompetitionEditPage = () => {
                   className={field}
                   value={newTeam}
                   onChange={(e) => setNewTeam(e.target.value)}
-                  placeholder="Ajouter une équipe"
+                  placeholder="Add a team"
                 />
                 <button
                   onClick={async () => {
@@ -368,9 +369,9 @@ const CompetitionEditPage = () => {
                       const palette = ["#e11d48", "#2563eb", "#16a34a", "#d97706"];
                       await addTeam(newTeam, palette[existingTeams.length % palette.length]);
                       setNewTeam("");
-                      toast.success("Équipe ajoutée");
+                      toast.success("Team added");
                     } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Refusé");
+                      toast.error(err instanceof Error ? err.message : "Refused");
                     }
                   }}
                   disabled={!newTeam.trim()}
@@ -382,17 +383,17 @@ const CompetitionEditPage = () => {
             </div>
             {existingTeams.length === 0 && (
               <p className="text-[11px] text-muted-foreground mt-2">
-                Sans équipe, chacun joue pour soi et seul le classement des
-                joueurs désigne le vainqueur.
+                With no teams, everyone plays for themselves and the player
+                standings alone decide the winner.
               </p>
             )}
           </section>
         )}
 
-        {editing && existingDays.length > 0 && (
+        {editing && (
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-              Les thèmes
+              Themes
             </h2>
             <div className="space-y-2">
               {existingDays.map((day) => {
@@ -406,8 +407,8 @@ const CompetitionEditPage = () => {
                       readOnly={!open}
                       onBlur={async (e) => {
                         if (!open || e.target.value === day.theme) return;
-                        try { await setTheme(day.id, e.target.value); toast.success("Thème mis à jour"); }
-                        catch (err) { toast.error(err instanceof Error ? err.message : "Refusé"); }
+                        try { await setTheme(day.id, e.target.value); toast.success("Theme updated"); }
+                        catch (err) { toast.error(err instanceof Error ? err.message : "Refused"); }
                       }}
                     />
                     {!open && <Lock size={14} className="text-muted-foreground shrink-0" />}
@@ -415,9 +416,48 @@ const CompetitionEditPage = () => {
                 );
               })}
             </div>
+            {/*
+              Ajouter un jour : sans ce champ, une compétition dont les jours
+              avaient échoué à la création restait vide pour toujours, et le
+              seul recours était de tout recréer.
+            */}
+            <div className="flex gap-2 mt-2">
+              <span className="w-5 shrink-0" />
+              <input
+                className={field}
+                value={newDay}
+                onChange={(e) => setNewDay(e.target.value)}
+                placeholder="Add a day — its theme"
+              />
+              <button
+                onClick={async () => {
+                  if (!newDay.trim()) return;
+                  try {
+                    // Le lendemain du dernier jour, ou demain si la liste est
+                    // vide : un jour déjà commencé serait refusé par la base.
+                    const last = existingDays.reduce(
+                      (max, d) => (d.date > max ? d.date : max),
+                      today
+                    );
+                    const next = new Date(`${last}T00:00:00Z`);
+                    next.setUTCDate(next.getUTCDate() + 1);
+                    await addDay(newDay, next.toISOString().slice(0, 10));
+                    setNewDay("");
+                    toast.success("Day added");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Refused");
+                  }
+                }}
+                disabled={!newDay.trim()}
+                className="px-3 shrink-0 text-primary disabled:opacity-40"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+
             <p className="text-[11px] text-muted-foreground mt-2">
-              Un jour commencé ne se réécrit plus : les anecdotes déjà publiées
-              l'ont été sous ce thème-là.
+              A day that has started can no longer be rewritten — the stories
+              already posted were posted under that theme.
             </p>
           </section>
         )}

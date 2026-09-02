@@ -26,7 +26,22 @@ const RecordPage = () => {
   // l'écran d'une compétition en désigne un ; sans lui on prend celui de la
   // compétition où l'on joue.
   const [searchParams] = useSearchParams();
-  const { active: todayTheme } = useTodayTheme(searchParams.get("competitionDay"));
+  const { themes: challengeThemes, active: suggestedTheme } =
+    useTodayTheme(searchParams.get("competitionDay"));
+  /**
+   * Le défi auquel cet enregistrement participe — `null` pour aucun.
+   *
+   * Explicite, et non plus déduit : jusqu'ici TOUT enregistrement était
+   * rattaché en silence à un défi, choisi arbitrairement quand on en jouait
+   * plusieurs, sans aucun moyen de refuser. Publier une anecdote personnelle
+   * la faisait donc concourir à l'insu de son auteur.
+   */
+  const [challengeDayId, setChallengeDayId] = useState<string | null>(null);
+  useEffect(() => {
+    setChallengeDayId(suggestedTheme?.dayId ?? null);
+  }, [suggestedTheme?.dayId]);
+  const todayTheme =
+    challengeThemes.find((t) => t.dayId === challengeDayId) ?? null;
   
   const [isRecording, setIsRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -274,10 +289,10 @@ const RecordPage = () => {
 
       toast.success(
         wantVideo
-          ? "Publié ! On dessine ton anecdote, on te prévient 🎨"
+          ? "Published! We're drawing your story — we'll let you know."
           : todayTheme
-          ? "Publié ! Ton anecdote est en lice pour aujourd'hui."
-          : "Published! 🎉"
+          ? "Published! Your story is in today's running."
+          : "Published!"
       );
       setTitle(""); setAudioBlob(null); setElapsed(0); setWantVideo(false);
       setImageFile(null); setImagePreview(null); setLocation("");
@@ -357,15 +372,56 @@ const RecordPage = () => {
         </motion.button>
       )}
 
-      {/* Plus de thème du jour quand on ne participe à rien : les sept phrases
-          codées en dur qui étaient là s'affichaient en anglais et ne pouvaient
-          pas changer sans une publication sur l'App Store. */}
-      {todayTheme && (
-        <div className="gradient-red-soft rounded-xl px-3 py-2 mb-2 border border-primary/10 shrink-0">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-            {todayTheme.competitionName} · jour {todayTheme.dayIndex}
-          </p>
-          <p className="text-xs font-display font-bold text-foreground leading-snug">{todayTheme.theme}</p>
+      {/*
+        Le thème du jour, et le choix d'y participer.
+
+        C'était une simple étiquette, alors que le rattachement se faisait quand
+        même : on ne pouvait ni changer de défi, ni s'abstenir. Une case à
+        cocher règle les deux — et rend visible ce qui se passait en silence.
+      */}
+      {challengeThemes.length > 0 && (
+        <div className={`rounded-xl px-3 py-2 mb-2 border shrink-0 ${
+          todayTheme ? "gradient-red-soft border-primary/10" : "bg-card border-border/40"
+        }`}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide min-w-0 truncate">
+              {todayTheme
+                ? `${todayTheme.competitionName} · day ${todayTheme.dayIndex}`
+                : "Not entered in a challenge"}
+            </p>
+            <button
+              onClick={() =>
+                setChallengeDayId(todayTheme ? null : suggestedTheme?.dayId ?? null)
+              }
+              className="text-[10px] font-semibold text-primary shrink-0"
+            >
+              {todayTheme ? "Don't enter" : "Enter"}
+            </button>
+          </div>
+          {todayTheme && (
+            <p className="text-xs font-display font-bold text-foreground leading-snug break-words">
+              {todayTheme.theme}
+            </p>
+          )}
+          {/* Plusieurs défis le même jour : on choisit lequel, plutôt que de
+              subir le premier de la liste. */}
+          {challengeThemes.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto mt-1.5 -mx-1 px-1">
+              {challengeThemes.map((t) => (
+                <button
+                  key={t.dayId}
+                  onClick={() => setChallengeDayId(t.dayId)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-medium border shrink-0 ${
+                    t.dayId === challengeDayId
+                      ? "border-primary text-primary bg-primary/10"
+                      : "border-border/40 text-muted-foreground"
+                  }`}
+                >
+                  {t.competitionName}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

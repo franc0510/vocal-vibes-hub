@@ -107,7 +107,7 @@ export const useCompetition = (competitionId: string | undefined) => {
     async (teamId: string | null) => {
       if (!user || !competitionId) return;
       if (membership && !canChangeTeam(membership)) {
-        throw new Error("Ton équipe est verrouillée depuis ton premier point.");
+        throw new Error("You already picked your team — that choice is final.");
       }
       const { error } = await db
         .from("competition_members")
@@ -142,7 +142,7 @@ export const useCompetition = (competitionId: string | undefined) => {
       const day = days.find((d) => d.id === dayId);
       if (!day) return;
       if (!canEditDay(day.date, today)) {
-        throw new Error("Ce jour a commencé : son thème ne se change plus.");
+        throw new Error("This day has started — its theme can no longer change.");
       }
       const { error } = await db.from("competition_days").update({ theme }).eq("id", dayId);
       if (error) throw error;
@@ -169,13 +169,40 @@ export const useCompetition = (competitionId: string | undefined) => {
     ) => {
       if (!competitionId) return;
       if (patch.scoring && !canEditScoring) {
-        throw new Error("Le barème est gelé depuis le départ de la compétition.");
+        throw new Error("Scoring is frozen once the challenge has started.");
       }
       const { error } = await db.from("competitions").update(patch).eq("id", competitionId);
       if (error) throw error;
       await refresh();
     },
     [competitionId, canEditScoring, refresh]
+  );
+
+  /**
+   * Ajouter un jour, après la création.
+   *
+   * Il n'existait aucun chemin pour ça, et une compétition dont les jours
+   * avaient échoué à la création était donc définitivement inutilisable — sans
+   * thème, sans urne, sans rien. C'est exactement ce qu'a rencontré le premier
+   * testeur. La politique « Owners add days » l'autorise depuis que la date
+   * exigée est `>= aujourd'hui` et non `>`.
+   *
+   * `ends_on` suit : la durée n'est pas un réglage, c'est le nombre de jours.
+   */
+  const addDay = useCallback(
+    async (theme: string, date: string) => {
+      if (!competitionId) return;
+      const nextIndex = days.reduce((max, d) => Math.max(max, d.day_index), 0) + 1;
+      const { error } = await db
+        .from("competition_days")
+        .insert({ competition_id: competitionId, day_index: nextIndex, theme: theme.trim(), date });
+      if (error) throw error;
+      if (!competition || date > competition.ends_on) {
+        await db.from("competitions").update({ ends_on: date }).eq("id", competitionId);
+      }
+      await refresh();
+    },
+    [competitionId, competition, days, refresh]
   );
 
   /**
@@ -226,7 +253,7 @@ export const useCompetition = (competitionId: string | undefined) => {
   return {
     competition, teams, days, membership, currentDay, today,
     isOwner, isMember, isOver, canEditScoring, loading,
-    refresh, chooseTeam, leave, setTheme, update,
+    refresh, chooseTeam, leave, setTheme, update, addDay,
     addTeam, renameTeam, removeTeam,
   };
 };

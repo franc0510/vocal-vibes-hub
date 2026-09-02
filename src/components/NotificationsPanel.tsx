@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, MessageCircle, Share2, UserPlus, X, Users, Mic, Crown } from "lucide-react";
+import { Heart, MessageCircle, Share2, UserPlus, X, Users, Mic, Crown, Trophy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Notification {
   id: string;
-  type: "like" | "comment" | "share" | "follow" | "group_added" | "group_post" | "friend_post" | "weekly_winner";
+  type:
+    | "like" | "comment" | "share" | "follow"
+    | "group_added" | "group_post" | "friend_post" | "weekly_winner"
+    | "competition_invite" | "competition_day" | "competition_result";
   actor_id: string;
   actor_name: string;
   actor_avatar: string;
@@ -28,6 +31,12 @@ const iconMap: Record<string, any> = {
   group_post: Mic,
   friend_post: Mic,
   weekly_winner: Crown,
+  // Les trois types de défi sont déclarés en base depuis la migration des
+  // compétitions. Sans entrée ici, `iconMap[type]` vaut undefined et le rendu
+  // du panneau PLANTE — un piège armé qu'il suffisait d'une ligne de désarmer.
+  competition_invite: Trophy,
+  competition_day: Trophy,
+  competition_result: Crown,
 };
 
 const getActionText = (notif: Notification) => {
@@ -39,7 +48,12 @@ const getActionText = (notif: Notification) => {
     case "group_added": return `added you to the group "${notif.group_name || "a group"}"`;
     case "group_post": return `added a VocMe in the group "${notif.group_name || "a group"}"`;
     case "friend_post": return "added a new VocMe";
-    case "weekly_winner": return "🏆 Your VocMe was crowned VocMe of the Week!";
+    // Emoji proscrits ici : ce texte est rendu par la WebView, dont la pile de
+    // polices n'a pas toujours le glyphe — le 🏆 s'affichait « ? » sur iPhone.
+    case "weekly_winner": return "Your VocMe was crowned VocMe of the Week!";
+    case "competition_invite": return "invited you to a challenge";
+    case "competition_day": return "New theme of the day — record yours!";
+    case "competition_result": return "The challenge results are in!";
     default: return "interacted";
   }
 };
@@ -242,6 +256,10 @@ const NotificationsPanel = ({ open, onClose }: NotificationsPanelProps) => {
                         onClick={() => {
                           onClose();
                           if (isWeeklyWin) { navigate("/weekly"); return; }
+                          // Challenge notifications carry a competition, not an
+                          // actor — sending them to `/user/null` would 404.
+                          const competitionId = (notif as { competition_id?: string }).competition_id;
+                          if (competitionId) { navigate(`/competitions/${competitionId}`); return; }
                           // For post-related notifications (like, comment, share,
                           // friend_post, group_post) → open the post directly.
                           // For follow / group_added → open the actor's profile.

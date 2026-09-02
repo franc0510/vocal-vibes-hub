@@ -48,8 +48,17 @@ export const useRealtimeNotifications = () => {
       removeHandle = await LocalNotifications.addListener(
         "localNotificationActionPerformed",
         (action) => {
-          const extra = action?.notification?.extra as { postId?: string; actorId?: string } | undefined;
-          if (extra?.postId) {
+          const extra = action?.notification?.extra as {
+            postId?: string; actorId?: string; competitionId?: string; dayId?: string;
+          } | undefined;
+          // Le rappel du matin ouvre le micro, thème déjà chargé : taper la
+          // notification puis devoir encore trouver le bouton « raconter »
+          // perdrait exactement les gens qu'elle vient de convaincre.
+          if (extra?.dayId) {
+            navigate(`/record?competitionDay=${extra.dayId}`);
+          } else if (extra?.competitionId) {
+            navigate(`/competitions/${extra.competitionId}`);
+          } else if (extra?.postId) {
             navigate(`/post/${extra.postId}`);
           } else if (extra?.actorId) {
             navigate(`/user/${extra.actorId}`);
@@ -83,6 +92,12 @@ export const useRealtimeNotifications = () => {
             group_post: "posted a VocMe in a group",
             friend_post: "added a new VocMe",
             weekly_winner: "Your VocMe was crowned VocMe of the Week!",
+            // Déclarés en base par la migration des compétitions. Sans entrée
+            // ici, une telle notification s'annoncerait « Someone New
+            // notification » — le type existe, le texte manquait.
+            competition_invite: "invited you to a challenge",
+            competition_day: "New theme of the day — record yours!",
+            competition_result: "The challenge results are in!",
           };
 
           // Weekly winner is a self-notification — celebratory, no actor name

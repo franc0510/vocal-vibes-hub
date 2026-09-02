@@ -8,7 +8,7 @@ import { useCompetitions, type Competition } from "@/hooks/useCompetitions";
 import { competitionDate, DEFAULT_TIMEZONE } from "@/lib/competitionClock";
 
 /**
- * L'écran d'accueil des compétitions — celui qui remplace Weekly dans la nav.
+ * L'écran d'accueil des défis — celui qui remplace Weekly dans la nav.
  *
  * Deux listes et rien d'autre : celles où je joue, celles que je peux
  * rejoindre. Un code pour les privées.
@@ -24,12 +24,12 @@ const statusOf = (c: Competition) => {
   // Dans le fuseau de la compétition, et avec la bascule à 4 h : une soirée
   // qui court encore à 2 h du matin ne doit pas s'afficher « Terminée ».
   const today = competitionDate(new Date(), c.timezone ?? DEFAULT_TIMEZONE);
-  if (c.closed_at || c.ends_on < today) return { label: "Terminée", tone: "text-muted-foreground" };
+  if (c.closed_at || c.ends_on < today) return { label: "Over", tone: "text-muted-foreground" };
   if (c.starts_on > today) {
     const days = Math.round((new Date(c.starts_on).getTime() - Date.now()) / 86400000);
-    return { label: days <= 1 ? "Demain" : `Dans ${days} jours`, tone: "text-amber-400" };
+    return { label: days <= 1 ? "Tomorrow" : `In ${days} days`, tone: "text-amber-400" };
   }
-  return { label: "En cours", tone: "text-primary" };
+  return { label: "Live", tone: "text-primary" };
 };
 
 const CompetitionCard = ({ competition, onOpen }: { competition: Competition; onOpen: () => void }) => {
@@ -48,7 +48,7 @@ const CompetitionCard = ({ competition, onOpen }: { competition: Competition; on
         <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground min-w-0">
           <span className={status.tone}>{status.label}</span>
           <span className="flex items-center gap-1">
-            <Calendar size={11} />{dayCount(competition)} jours
+            <Calendar size={11} />{dayCount(competition)} days
           </span>
           {competition.prize && (
             <span className="flex items-center gap-1 min-w-0">
@@ -75,15 +75,15 @@ const CompetitionsPage = () => {
     try {
       const found = await findByCode(code);
       if (!found) {
-        toast.error("Aucune compétition avec ce code.");
+        toast.error("No challenge with that code.");
         return;
       }
       await join(found.id);
-      toast.success(`Bienvenue dans « ${found.name} » !`);
+      toast.success(`Welcome to "${found.name}"!`);
       setCode("");
       navigate(`/competitions/${found.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Impossible de rejoindre.");
+      toast.error(err instanceof Error ? err.message : "Could not join.");
     } finally {
       setJoining(false);
     }
@@ -94,32 +94,32 @@ const CompetitionsPage = () => {
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border/40"
               style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <div className="flex items-center justify-between px-4 py-3">
-          <h1 className="text-xl font-bold text-foreground">Compétitions</h1>
+          <h1 className="text-xl font-bold text-foreground">Challenges</h1>
           <button
             onClick={() => navigate("/competitions/new")}
             className="flex items-center gap-1 text-sm font-medium text-primary"
           >
-            <Plus size={18} /> Créer
+            <Plus size={18} /> New
           </button>
         </div>
       </header>
 
       <div className="px-4 pt-4 space-y-6">
-        {loading && <p className="text-sm text-muted-foreground">Chargement…</p>}
+        {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
         {!loading && mine.length === 0 && open.length === 0 && (
           <div className="text-center py-16">
             <Trophy size={40} className="mx-auto text-muted-foreground mb-3" />
-            <p className="text-foreground font-medium">Aucune compétition pour l'instant</p>
+            <p className="text-foreground font-medium">No challenges yet</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-xs mx-auto">
-              Lance un défi entre écoles, anime un mariage ou un séminaire — ou
-              rejoins-en une avec un code.
+              Run a challenge between schools, liven up a wedding or an
+              offsite — or join one with a code.
             </p>
             <button
               onClick={() => navigate("/competitions/new")}
               className="mt-5 px-5 py-2.5 rounded-full gradient-red text-primary-foreground font-medium text-sm"
             >
-              Créer une compétition
+              Create a challenge
             </button>
           </div>
         )}
@@ -127,7 +127,7 @@ const CompetitionsPage = () => {
         {mine.length > 0 && (
           <section className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Où je joue
+              Where I play
             </h2>
             {mine.map((c) => (
               <CompetitionCard key={c.id} competition={c} onOpen={() => navigate(`/competitions/${c.id}`)} />
@@ -138,7 +138,7 @@ const CompetitionsPage = () => {
         {open.length > 0 && (
           <section className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-              <Users size={12} /> Ouvertes à tous
+              <Users size={12} /> Open to everyone
             </h2>
             {open.map((c) => (
               <CompetitionCard key={c.id} competition={c} onOpen={() => navigate(`/competitions/${c.id}`)} />
@@ -148,7 +148,7 @@ const CompetitionsPage = () => {
 
         <section className="space-y-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-            <KeyRound size={12} /> Rejoindre avec un code
+            <KeyRound size={12} /> Join with a code
           </h2>
           <div className="flex gap-2">
             <input
@@ -163,7 +163,7 @@ const CompetitionsPage = () => {
               disabled={joining || code.length < 4}
               className="px-5 shrink-0 rounded-xl gradient-red text-primary-foreground font-medium text-sm disabled:opacity-40"
             >
-              Rejoindre
+              Join
             </button>
           </div>
         </section>
