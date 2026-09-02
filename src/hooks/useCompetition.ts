@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { db } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
-import { canChangeTeam, canEditDay } from "@/lib/competitionScoring";
+import { canChangeTeam, canEditDay, type ScoringWeights } from "@/lib/competitionScoring";
+import { competitionDate, DEFAULT_TIMEZONE } from "@/lib/competitionClock";
 import type { Competition } from "./useCompetitions";
 
 /**
@@ -34,7 +35,6 @@ export interface Membership {
   locked_at: string | null;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
 
 export const useCompetition = (competitionId: string | undefined) => {
   const { user } = useAuth();
@@ -75,12 +75,26 @@ export const useCompetition = (competitionId: string | undefined) => {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  /**
+   * Aujourd'hui, vu de la compétition.
+   *
+   * Dans son fuseau, et avec la bascule à 4 h du matin : à 1 h, la journée
+   * d'hier court encore. L'ancien `new Date().toISOString().slice(0, 10)`
+   * rendait la date UTC et faisait sauter le thème une partie de la nuit.
+   */
+  const today = competitionDate(
+    new Date(),
+    competition?.timezone ?? DEFAULT_TIMEZONE
+  );
+
   /** Le jour en cours, ou rien si la compétition n'a pas commencé ou est finie. */
-  const currentDay = days.find((d) => d.date === today()) ?? null;
+  const currentDay = days.find((d) => d.date === today) ?? null;
 
   const isOwner = Boolean(user && competition && competition.owner_id === user.id);
   const isMember = Boolean(membership);
-  const isOver = Boolean(competition && competition.ends_on < today());
+  const isOver = Boolean(competition && competition.ends_on < today);
+  /** Le barème ne se règle que tant que rien n'est joué. */
+  const canEditScoring = Boolean(competition && competition.starts_on > today);
 
   /**
    * Changer d'équipe, tant que rien n'a été marqué.
@@ -93,7 +107,7 @@ export const useCompetition = (competitionId: string | undefined) => {
     async (teamId: string | null) => {
       if (!user || !competitionId) return;
       if (membership && !canChangeTeam(membership)) {
-        throw new Error("Ton équipe est verrouillée depuis ton premier point.");
+        throw new Error("You already picked your team — that choice is final.");
       }
       const { error } = await db
         .from("competition_members")
@@ -127,29 +141,119 @@ export const useCompetition = (competitionId: string | undefined) => {
     async (dayId: string, theme: string) => {
       const day = days.find((d) => d.id === dayId);
       if (!day) return;
-      if (!canEditDay(day.date, today())) {
-        throw new Error("Ce jour a commencé : son thème ne se change plus.");
+      if (!canEditDay(day.date, today)) {
+        throw new Error("This day has started — its theme can no longer change.");
       }
       const { error } = await db.from("competition_days").update({ theme }).eq("id", dayId);
       if (error) throw error;
       await refresh();
     },
-    [days, refresh]
+    [days, today, refresh]
   );
 
+  /**
+   * Régler la compétition — barème compris, tant qu'elle n'a pas commencé.
+   *
+   * Un trigger en base applique la même règle sur `scoring` : changer un
+   * coefficient en cours de route rebat rétroactivement tout un classement
+   * doté d'un lot. Le garde-fou d'ici évite seulement de proposer un champ
+   * que le serveur refusera.
+   */
   const update = useCallback(
-    async (patch: Partial<Pick<Competition, "name" | "description" | "prize" | "visibility">>) => {
+    async (
+      patch: Partial<
+        Pick<Competition, "name" | "description" | "prize" | "visibility"> & {
+          scoring: ScoringWeights;
+        }
+      >
+    ) => {
       if (!competitionId) return;
+      if (patch.scoring && !canEditScoring) {
+        throw new Error("Scoring is frozen once the challenge has started.");
+      }
       const { error } = await db.from("competitions").update(patch).eq("id", competitionId);
+      if (error) throw error;
+      await refresh();
+    },
+    [competitionId, canEditScoring, refresh]
+  );
+
+  /**
+   * Ajouter un jour, après la création.
+   *
+   * Il n'existait aucun chemin pour ça, et une compétition dont les jours
+   * avaient échoué à la création était donc définitivement inutilisable — sans
+   * thème, sans urne, sans rien. C'est exactement ce qu'a rencontré le premier
+   * testeur. La politique « Owners add days » l'autorise depuis que la date
+   * exigée est `>= aujourd'hui` et non `>`.
+   *
+   * `ends_on` suit : la durée n'est pas un réglage, c'est le nombre de jours.
+   */
+  const addDay = useCallback(
+    async (theme: string, date: string) => {
+      if (!competitionId) return;
+      const nextIndex = days.reduce((max, d) => Math.max(max, d.day_index), 0) + 1;
+      const { error } = await db
+        .from("competition_days")
+        .insert({ competition_id: competitionId, day_index: nextIndex, theme: theme.trim(), date });
+      if (error) throw error;
+      if (!competition || date > competition.ends_on) {
+        await db.from("competitions").update({ ends_on: date }).eq("id", competitionId);
+      }
+      await refresh();
+    },
+    [competitionId, competition, days, refresh]
+  );
+
+  /**
+   * Les équipes, après la création.
+   *
+   * Elles n'étaient réglables qu'au moment de créer : un organisateur qui
+   * découvrait une faute de frappe ou une troisième classe devait recommencer
+   * la compétition. La politique « Owners manage teams » les autorisait déjà,
+   * il manquait le chemin.
+   */
+  const addTeam = useCallback(
+    async (name: string, color: string | null) => {
+      if (!competitionId) return;
+      const { error } = await db
+        .from("competition_teams")
+        .insert({ competition_id: competitionId, name: name.trim(), color });
       if (error) throw error;
       await refresh();
     },
     [competitionId, refresh]
   );
 
+  const renameTeam = useCallback(
+    async (teamId: string, name: string, color?: string | null) => {
+      const patch: { name: string; color?: string | null } = { name: name.trim() };
+      if (color !== undefined) patch.color = color;
+      const { error } = await db.from("competition_teams").update(patch).eq("id", teamId);
+      if (error) throw error;
+      await refresh();
+    },
+    [refresh]
+  );
+
+  /**
+   * Supprimer une équipe ne supprime personne : `team_id` est
+   * `ON DELETE SET NULL`, donc ses joueurs repassent en solo avec leurs points.
+   * L'écran doit le dire avant de demander confirmation.
+   */
+  const removeTeam = useCallback(
+    async (teamId: string) => {
+      const { error } = await db.from("competition_teams").delete().eq("id", teamId);
+      if (error) throw error;
+      await refresh();
+    },
+    [refresh]
+  );
+
   return {
-    competition, teams, days, membership, currentDay,
-    isOwner, isMember, isOver, loading,
-    refresh, chooseTeam, leave, setTheme, update,
+    competition, teams, days, membership, currentDay, today,
+    isOwner, isMember, isOver, canEditScoring, loading,
+    refresh, chooseTeam, leave, setTheme, update, addDay,
+    addTeam, renameTeam, removeTeam,
   };
 };

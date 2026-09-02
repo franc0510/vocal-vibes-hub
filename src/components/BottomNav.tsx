@@ -8,7 +8,7 @@ const BottomNav = () => {
 
   const leftItems = [
     { icon: Home, label: "Feed", path: "/" },
-    { icon: Trophy, label: "Défis", path: "/competitions" },
+    { icon: Trophy, label: "Challenges", path: "/competitions" },
   ];
 
   const rightItems = [

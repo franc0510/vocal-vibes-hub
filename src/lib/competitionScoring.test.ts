@@ -5,7 +5,6 @@ import {
   scorePlayer,
   rankPlayers,
   rankTeams,
-  pendingBonuses,
   canEditDay,
   canChangeTeam,
   freezeStandings,
@@ -35,10 +34,12 @@ describe("scorePlayer", () => {
     expect(scorePlayer(player({ user_id: "a" }), DEFAULT_WEIGHTS)).toBe(1);
   });
 
-  it("ignore les bonus tant que la compétition court", () => {
+  it("compte les bonus des jours dépouillés, et sait les mettre de côté", () => {
     const t = player({ user_id: "a", day_wins: 2 });
-    expect(scorePlayer(t, DEFAULT_WEIGHTS)).toBe(1);
-    expect(scorePlayer(t, DEFAULT_WEIGHTS, true)).toBe(1 + 40);
+    // Par défaut ils comptent : un jour gagné est un jour dépouillé, donc acquis.
+    expect(scorePlayer(t, DEFAULT_WEIGHTS)).toBe(1 + 40);
+    // À faux, pour simuler ce que vaudrait le barème sans son terme de bonus.
+    expect(scorePlayer(t, DEFAULT_WEIGHTS, false)).toBe(1);
   });
 });
 
@@ -131,23 +132,39 @@ describe("égalités", () => {
   });
 });
 
-describe("freezeStandings", () => {
-  it("compte les bonus, et peut renverser le classement", () => {
-    const tallies = [
-      player({ user_id: "gros", team_id: "A", likes: 30 }),
-      player({ user_id: "fin", team_id: "B", likes: 5, day_wins: 2 }),
-    ];
-    expect(rankPlayers(tallies, DEFAULT_WEIGHTS)[0].user_id).toBe("gros");
+describe("les bonus du dépouillement", () => {
+  /**
+   * Deux jours gagnés valent 40 points, contre 25 pour vingt-cinq likes de
+   * plus. C'est le cœur du barème : on veut récompenser l'anecdote que les
+   * autres ont élue, pas celle qui a le plus d'amis.
+   */
+  const tallies = [
+    player({ user_id: "gros", team_id: "A", likes: 30 }),
+    player({ user_id: "fin", team_id: "B", likes: 5, day_wins: 2 }),
+  ];
 
+  it("comptent dans le classement en direct, pas seulement à la clôture", () => {
+    // `day_wins` ne rapporte que des jours dépouillés, donc acquis : les
+    // retenir jusqu'à la fin afficherait un classement que personne ne peut
+    // vérifier. 1 + 5 + 40 = 46 contre 1 + 30 = 31.
+    const live = rankPlayers(tallies, DEFAULT_WEIGHTS);
+    expect(live[0].user_id).toBe("fin");
+    expect(live[0].score).toBe(46);
+    expect(live[1].score).toBe(31);
+  });
+
+  it("se laissent retirer pour simuler un barème sans eux", () => {
+    // Le drapeau ne sert plus qu'à ça : voir ce que pèsent les autres termes.
+    const sansBonus = rankPlayers(tallies, DEFAULT_WEIGHTS, false);
+    expect(sansBonus[0].user_id).toBe("gros");
+    expect(sansBonus[0].score).toBe(31);
+  });
+
+  it("suivent le joueur jusque dans le classement gelé", () => {
     const final = freezeStandings(tallies, DEFAULT_WEIGHTS, "2026-09-08T00:00:00Z");
-    // 1 + 5 + 40 = 46 contre 31 : le bonus renverse, et c'est voulu.
     expect(final.winner_user_id).toBe("fin");
     expect(final.winner_team_id).toBe("B");
     expect(final.closed_at).toBe("2026-09-08T00:00:00Z");
-  });
-
-  it("annonce d'avance les bonus encore à distribuer", () => {
-    expect(pendingBonuses([player({ user_id: "a", day_wins: 3 }), player({ user_id: "b" })])).toBe(3);
   });
 });
 

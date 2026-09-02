@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { db } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
 import { TEMPLATES, fromTemplate, type CompetitionTemplate } from "@/lib/competitionTemplates";
+import { competitionDate, DEFAULT_TIMEZONE } from "@/lib/competitionClock";
+import { DEFAULT_WEIGHTS, type ScoringWeights } from "@/lib/competitionScoring";
 
 /**
  * La liste des compétitions : les miennes, les publiques ouvertes, et la
@@ -20,6 +22,8 @@ export interface Competition {
   visibility: "public" | "private";
   starts_on: string;
   ends_on: string;
+  /** Le fuseau qui décide des jours. En base depuis le début, jamais lu. */
+  timezone: string;
   join_code: string | null;
   template_key: string | null;
   closed_at: string | null;
@@ -27,7 +31,15 @@ export interface Competition {
   final_standings: unknown | null;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+/**
+ * La date du jour pour la liste, sans compétition sous la main.
+ *
+ * On ne connaît pas encore le fuseau de chacune, alors on prend celui du
+ * défaut : ce filtre-ci ne sert qu'à écarter les compétitions terminées depuis
+ * longtemps, et une heure d'écart n'en cache aucune. Les écrans qui décident
+ * vraiment d'un jour, eux, lisent `competition.timezone`.
+ */
+const listDate = () => competitionDate(new Date(), DEFAULT_TIMEZONE);
 
 /** Un code court, lisible au téléphone : ni 0/O ni 1/I. */
 const makeJoinCode = () => {
@@ -71,7 +83,7 @@ export const useCompetitions = () => {
         .from("competitions")
         .select("*")
         .eq("visibility", "public")
-        .gte("ends_on", today())
+        .gte("ends_on", listDate())
         .order("starts_on", { ascending: true });
       const joinedIds = new Set(joined.map((c) => c.id));
       setOpen(((publics ?? []) as Competition[]).filter((c) => !joinedIds.has(c.id)));
@@ -98,8 +110,10 @@ export const useCompetitions = () => {
       template?: CompetitionTemplate | null;
       teams?: { name: string; color: string }[];
       days?: { day_index: number; theme: string }[];
+      /** Le barème choisi à la création. Après le départ, il est gelé. */
+      scoring?: ScoringWeights;
     }) => {
-      if (!user) throw new Error("Il faut être connecté pour créer une compétition.");
+      if (!user) throw new Error("You need to be signed in to create a challenge.");
       const template = input.template ?? null;
       const seed = template ? fromTemplate(template, input.startsOn) : null;
 
@@ -109,7 +123,7 @@ export const useCompetitions = () => {
         date.setDate(date.getDate() + d.day_index - 1);
         return { day_index: d.day_index, theme: d.theme, date: date.toISOString().slice(0, 10) };
       });
-      if (dated.length === 0) throw new Error("Une compétition a besoin d'au moins un jour.");
+      if (dated.length === 0) throw new Error("A challenge needs at least one day.");
 
       const { data: created, error } = await db
         .from("competitions")
@@ -122,7 +136,10 @@ export const useCompetitions = () => {
           starts_on: input.startsOn.toISOString().slice(0, 10),
           // La durée n'est pas un réglage : c'est le nombre de jours.
           ends_on: dated[dated.length - 1].date,
-          scoring: seed?.scoring ?? undefined,
+          // L'écran de création propose déjà un barème, pré-rempli depuis le
+          // modèle : c'est lui qui fait foi, le modèle n'étant qu'un point de
+          // départ. Sans écran (script, API), on retombe sur le modèle.
+          scoring: input.scoring ?? seed?.scoring ?? DEFAULT_WEIGHTS,
           template_key: template?.key ?? null,
           // Une privée sans code ne se partage que nommément ; en donner un
           // coûte une colonne et évite d'inviter cinquante personnes à la main.
@@ -132,20 +149,52 @@ export const useCompetitions = () => {
         .single();
       if (error) throw error;
 
+      /**
+       * À partir d'ici, la compétition existe déjà en base. Toute erreur
+       * laisserait donc une coquille — et c'est exactement ce qui s'est
+       * produit : ces trois insertions avalaient leur erreur, si bien qu'une
+       * politique RLS trop stricte sur le jour 1 a créé des compétitions à
+       * ZÉRO JOUR, annoncées comme créées, et qu'aucun écran ne pouvait plus
+       * réparer. On défait donc plutôt que de laisser un moignon.
+       */
+      const rollback = async (reason: string): Promise<never> => {
+        await db.from("competitions").delete().eq("id", created.id);
+        throw new Error(reason);
+      };
+
       const teams = input.teams ?? seed?.teams ?? [];
       if (teams.length > 0) {
-        await db.from("competition_teams").insert(
+        const { error: teamsError } = await db.from("competition_teams").insert(
           teams.map((t) => ({ competition_id: created.id, name: t.name, color: t.color }))
         );
+        if (teamsError) await rollback("Could not create the teams. Nothing was saved.");
       }
-      await db.from("competition_days").insert(
-        dated.map((d) => ({ ...d, competition_id: created.id }))
-      );
+
+      /**
+       * Les jours, un par un.
+       *
+       * Une insertion groupée est atomique : une seule ligne refusée les
+       * emporte toutes les sept, et le message ne dit pas laquelle. Ligne par
+       * ligne, on sait exactement où ça bloque — et le coût est de six
+       * allers-retours sur une action qu'on fait une fois par défi.
+       */
+      for (const day of dated) {
+        const { error: dayError } = await db
+          .from("competition_days")
+          .insert({ ...day, competition_id: created.id });
+        if (dayError) {
+          await rollback(
+            `Could not create day ${day.day_index} (${day.date}). Nothing was saved.`
+          );
+        }
+      }
+
       // Le créateur est membre : sinon il ne voit pas sa propre compétition
       // privée, la politique de lecture ne parlant que des membres et de lui.
-      await db
+      const { error: memberError } = await db
         .from("competition_members")
         .insert({ competition_id: created.id, user_id: user.id, role: "owner" });
+      if (memberError) await rollback("Could not add you to your own challenge. Nothing was saved.");
 
       await refresh();
       return created as Competition;
@@ -156,7 +205,7 @@ export const useCompetitions = () => {
   /** Rejoint une compétition publique, ou une privée par son code. */
   const join = useCallback(
     async (competitionId: string, teamId?: string | null) => {
-      if (!user) throw new Error("Il faut être connecté pour rejoindre.");
+      if (!user) throw new Error("You need to be signed in to join.");
       const { error } = await db
         .from("competition_members")
         .insert({ competition_id: competitionId, user_id: user.id, team_id: teamId ?? null });

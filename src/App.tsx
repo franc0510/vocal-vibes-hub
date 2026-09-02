@@ -25,6 +25,7 @@ import NotFound from "./pages/NotFound";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useDailyNotification } from "@/hooks/useDailyNotification";
 import { useWeeklyNotifications } from "@/hooks/useWeeklyNotifications";
+import { useCompetitionDayNotifications } from "@/hooks/useCompetitionDayNotifications";
 import { useStoryIllustrationNotifications } from "@/hooks/useStoryIllustrationNotifications";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useEffect } from "react";
@@ -52,6 +53,7 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
 const AppRoutes = () => {
   useDailyNotification();
   useWeeklyNotifications();
+  useCompetitionDayNotifications();
   useStoryIllustrationNotifications();
   useRealtimeNotifications();
 
@@ -102,9 +104,15 @@ const AppRoutes = () => {
     };
   }, []);
 
+  // `w-full` et non `w-screen` : `100vw` peut dépasser la largeur réellement
+  // visible et suffit à faire partir toute l'application de travers.
   return (
-    <div className="w-screen h-screen flex flex-col bg-background" style={{ height: "100dvh" }}>
-      <div className="w-full flex-1 overflow-auto min-h-0">
+    <div className="w-full h-screen flex flex-col bg-background overflow-x-hidden" style={{ height: "100dvh" }}>
+      {/* `overflow-auto` portait sur LES DEUX axes : le moindre débordement,
+          n'importe où, rendait l'application scrollable latéralement. On coupe
+          ici — et on corrige les débordements à la source, pour ne pas se
+          contenter de masquer le prochain. */}
+      <div className="w-full flex-1 overflow-y-auto overflow-x-hidden min-h-0">
         <div className="max-w-lg w-full mx-auto h-full">
           <Routes>
             <Route path="/auth" element={<AuthRoute><AuthPage /></AuthRoute>} />
