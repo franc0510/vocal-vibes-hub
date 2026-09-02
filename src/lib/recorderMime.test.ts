@@ -42,8 +42,11 @@ describe("supportedRecorderMime", () => {
   });
 
   it("survit à un environnement sans MediaRecorder", () => {
-    // @ts-expect-error — deleting a global is the point of the test.
-    delete globalThis.MediaRecorder;
+    // Supprimer un global EST le sujet du test : on vérifie qu'un navigateur
+    // sans MediaRecorder ne fait pas tomber l'application. La directive
+    // `@ts-expect-error` qui couvrait cette ligne ne servait plus — elle ne
+    // levait plus rien, et TypeScript signale une directive orpheline.
+    delete (globalThis as { MediaRecorder?: unknown }).MediaRecorder;
     expect(() => supportedRecorderMime()).not.toThrow();
     expect(supportedRecorderMime()).toBe("");
   });
