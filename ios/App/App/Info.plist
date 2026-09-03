@@ -64,6 +64,10 @@
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>
+        <!-- Requis pour qu'une notification distante puisse réveiller
+             l'application. Sans lui, seules les bannières s'affichent et rien
+             ne peut être rafraîchi à leur arrivée. -->
+        <string>remote-notification</string>
     </array>
     <key>CFBundleURLTypes</key>
     <array>

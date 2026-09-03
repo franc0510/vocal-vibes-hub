@@ -1,0 +1,54 @@
+name: Dépouiller et clôturer les défis
+
+# Gagner un jour n'est pas un événement de base : `day_wins` se calcule à la
+# lecture, à partir des votes et de l'heure. On devient vainqueur parce que
+# `now()` a dépassé 4 h — ce sur quoi aucun trigger Postgres ne peut se poser.
+# Il faut donc quelqu'un qui passe régulièrement et le constate.
+#
+# Toutes les heures, et non une fois par jour à 4 h : les défis n'ont pas tous
+# le même fuseau, et une exécution manquée ne doit pas retarder une annonce de
+# vingt-quatre heures. La tâche est idempotente — elle ne renotifie personne.
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Répétition — n'écrit rien"
+        type: boolean
+        default: true
+
+jobs:
+  settle:
+    name: Dépouillement et clôtures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Vérifier la clé
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY manquante — les notifications système ont un actor_id nul, que la politique d'insertion interdit à tout compte ordinaire."
+            exit 1
+          fi
+
+      - name: Dépouiller et clôturer
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            npx tsx scripts/cloturer-defis.ts --dry-run
+          else
+            npx tsx scripts/cloturer-defis.ts
+          fi

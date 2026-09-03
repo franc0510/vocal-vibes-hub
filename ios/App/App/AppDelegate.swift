@@ -37,6 +37,30 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
     }
 
+    // MARK: - Notifications distantes
+    //
+    // Sans ces deux méthodes, iOS obtient bien un jeton d'appareil mais ne le
+    // remet jamais au pont Capacitor : l'écouteur `registration` côté
+    // JavaScript ne se déclenche pas, aucun jeton n'est enregistré, et rien
+    // n'arrive jamais sur le téléphone. Le contrat est de reposter le jeton
+    // sur NotificationCenter, exactement comme le plugin l'attend.
+
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(
+            name: .capacitorDidRegisterForRemoteNotifications,
+            object: deviceToken
+        )
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(
+            name: .capacitorDidFailToRegisterForRemoteNotifications,
+            object: error
+        )
+    }
+
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         // Called when the app was launched with a url. Feel free to add additional processing here,
         // but if you want the App API to support tracking app url opens, make sure to keep this call

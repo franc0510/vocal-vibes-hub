@@ -1,1 +1,6 @@
 project_id = "csfgnkolnruvgxceorlp"
+
+# Le déclencheur de la base appelle cette fonction avec la clé de service, pas
+# avec le jeton d'un utilisateur : la vérification par défaut la refuserait.
+[functions.send-push]
+verify_jwt = false

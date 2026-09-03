@@ -30,6 +30,7 @@ import { useWeeklyNotifications } from "@/hooks/useWeeklyNotifications";
 import { useCompetitionDayNotifications } from "@/hooks/useCompetitionDayNotifications";
 import { useStoryIllustrationNotifications } from "@/hooks/useStoryIllustrationNotifications";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
+import { usePushRegistration } from "@/hooks/usePushRegistration";
 import { useEffect } from "react";
 import { takePendingInvite } from "@/lib/pendingInvite";
 import { Capacitor } from "@capacitor/core";
@@ -67,6 +68,7 @@ const AppRoutes = () => {
   useCompetitionDayNotifications();
   useStoryIllustrationNotifications();
   useRealtimeNotifications();
+  usePushRegistration();
 
   // Handle OAuth deep link callback on native platforms
   useEffect(() => {

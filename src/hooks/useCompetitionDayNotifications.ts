@@ -31,6 +31,21 @@ import {
 const REMINDER_HOUR = 9;
 
 /**
+ * Le signal qui demande de replanifier.
+ *
+ * Le hook vit à la racine de l'application, hors de portée de l'écran
+ * d'enregistrement. Plutôt qu'un contexte pour une seule notification, un
+ * événement : publier annonce qu'il s'est passé quelque chose, et le
+ * planificateur en tire les conséquences.
+ */
+const REFRESH_EVENT = "vocme:competition-day-reminders";
+
+/** À appeler après avoir publié : le rappel du jour n'a plus lieu d'être. */
+export const refreshDayReminders = (): void => {
+  window.dispatchEvent(new Event(REFRESH_EVENT));
+};
+
+/**
  * Bande d'identifiants réservée.
  *
  * 1800 est le rappel quotidien, 1900 celui du dimanche, 500 000+ les
@@ -99,6 +114,30 @@ export const useCompetitionDayNotifications = () => {
       .order("date");
 
     const rows = (data ?? []) as DayRow[];
+    if (rows.length === 0) return;
+
+    /**
+     * Les jours auxquels j'ai déjà répondu.
+     *
+     * Le rappel sonnait pour TOUT LE MONDE, y compris pour qui avait déjà
+     * raconté la sienne — il ne lisait que le calendrier, jamais les
+     * anecdotes. Un rappel qui redemande ce qu'on vient de faire est un
+     * rappel qu'on apprend à ignorer.
+     *
+     * La condition est évaluée à la planification, pas au déclenchement : une
+     * notification confiée à l'ordonnanceur du téléphone ne peut plus poser de
+     * question. Publier relance donc `schedule()`, ce qui annule le rappel
+     * devenu inutile.
+     */
+    const { data: posted } = await db
+      .from("voice_posts")
+      .select("competition_day_id")
+      .eq("user_id", user.id)
+      .in("competition_day_id", rows.map((d) => d.id));
+    const answered = new Set(
+      ((posted ?? []) as { competition_day_id: string }[]).map((p) => p.competition_day_id)
+    );
+
     const pending: {
       id: number;
       title: string;
@@ -111,6 +150,7 @@ export const useCompetitionDayNotifications = () => {
     }[] = [];
 
     for (const day of rows) {
+      if (answered.has(day.id)) continue;
       const timezone = day.competitions?.timezone ?? DEFAULT_TIMEZONE;
       const at = instantAt(day.date, REMINDER_HOUR, timezone);
       // Un rappel dont l'heure est passée n'a plus rien à annoncer : le jour
@@ -158,6 +198,15 @@ export const useCompetitionDayNotifications = () => {
 
   useEffect(() => {
     schedule();
+  }, [schedule]);
+
+  // Publier annule le rappel de ce jour-là : la condition « pas encore
+  // répondu » est figée au moment de la planification, donc il faut
+  // replanifier pour qu'elle tienne compte de ce qui vient d'arriver.
+  useEffect(() => {
+    const onRefresh = () => { schedule(); };
+    window.addEventListener(REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(REFRESH_EVENT, onRefresh);
   }, [schedule]);
 
   /**

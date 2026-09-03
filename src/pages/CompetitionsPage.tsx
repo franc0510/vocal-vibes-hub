@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Trophy, Plus, Users, Calendar, KeyRound, ChevronRight, Mic, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Trophy, Plus, Users, Calendar, KeyRound, ChevronRight, Mic, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { useCompetitions, type Competition } from "@/hooks/useCompetitions";
@@ -129,6 +129,7 @@ const CompetitionsPage = () => {
   const waiting = live.filter((d) => d.needsMe).length;
   const [code, setCode] = useState("");
   const [joining, setJoining] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
 
   const joinByCode = async () => {
     if (!code.trim()) return;
@@ -142,6 +143,7 @@ const CompetitionsPage = () => {
       await join(found.id);
       toast.success(`Welcome to "${found.name}"!`);
       setCode("");
+      setCodeOpen(false);
       navigate(`/competitions/${found.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not join.");
@@ -154,14 +156,25 @@ const CompetitionsPage = () => {
     <div className="min-h-screen bg-background pb-28">
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border/40"
               style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-        <div className="flex items-center justify-between px-4 py-3">
-          <h1 className="text-xl font-bold text-foreground">Challenges</h1>
-          <button
-            onClick={() => navigate("/competitions/new")}
-            className="flex items-center gap-1 text-sm font-medium text-primary"
-          >
-            <Plus size={18} /> New
-          </button>
+        <div className="flex items-center justify-between px-4 py-3 gap-2">
+          <h1 className="text-xl font-bold text-foreground min-w-0 truncate">Challenges</h1>
+          {/* Rejoindre est aussi fréquent que créer : les deux se tiennent
+              désormais côte à côte, au lieu d'obliger à faire défiler tout
+              l'écran pour trouver le champ de code. */}
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => setCodeOpen(true)}
+              className="flex items-center gap-1 text-sm font-medium text-primary"
+            >
+              <Plus size={18} /> Join
+            </button>
+            <button
+              onClick={() => navigate("/competitions/new")}
+              className="flex items-center gap-1 text-sm font-medium text-primary"
+            >
+              <Plus size={18} /> New
+            </button>
+          </div>
         </div>
       </header>
 
@@ -256,28 +269,63 @@ const CompetitionsPage = () => {
           </section>
         )}
 
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-            <KeyRound size={12} /> Join with a code
-          </h2>
-          <div className="flex gap-2">
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="ABC123"
-              maxLength={6}
-              className="flex-1 min-w-0 bg-card border border-border/40 rounded-xl px-4 py-2.5 text-foreground tracking-[0.2em] font-mono uppercase placeholder:tracking-normal placeholder:font-sans"
-            />
-            <button
-              onClick={joinByCode}
-              disabled={joining || code.length < 4}
-              className="px-5 shrink-0 rounded-xl gradient-red text-primary-foreground font-medium text-sm disabled:opacity-40"
-            >
-              Join
-            </button>
-          </div>
-        </section>
       </div>
+
+      {/*
+        Le champ de code, en feuille plutôt qu'en bas de page.
+
+        Il vivait sous les trois listes : rejoindre un défi demandait de faire
+        défiler tout l'écran, alors que c'est la première chose qu'on fait
+        quand on reçoit un code.
+      */}
+      <AnimatePresence>
+        {codeOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-end sm:items-center justify-center"
+            onClick={() => setCodeOpen(false)}
+          >
+            <motion.div
+              initial={{ y: 40 }} animate={{ y: 0 }} exit={{ y: 40 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg bg-card border-t sm:border border-border/40 sm:rounded-2xl p-5 space-y-4"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-bold text-foreground flex items-center gap-1.5 min-w-0">
+                  <KeyRound size={15} className="shrink-0" />
+                  <span className="truncate">Join with a code</span>
+                </h2>
+                <button onClick={() => setCodeOpen(false)} className="p-1 text-muted-foreground shrink-0">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="ABC123"
+                maxLength={6}
+                autoFocus
+                className="w-full min-w-0 bg-background border border-border/50 rounded-xl px-4 py-3 text-foreground text-center text-xl tracking-[0.3em] font-mono uppercase placeholder:tracking-normal placeholder:font-sans placeholder:text-base"
+              />
+
+              <p className="text-[11px] text-muted-foreground">
+                The person who invited you can find the code on the challenge's
+                share sheet. An invite link works too.
+              </p>
+
+              <button
+                onClick={joinByCode}
+                disabled={joining || code.length < 4}
+                className="w-full rounded-xl gradient-red text-primary-foreground font-medium py-3 disabled:opacity-40"
+              >
+                {joining ? "Joining…" : "Join"}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <BottomNav />
     </div>

@@ -10,7 +10,8 @@ interface Notification {
   type:
     | "like" | "comment" | "share" | "follow"
     | "group_added" | "group_post" | "friend_post" | "weekly_winner"
-    | "competition_invite" | "competition_day" | "competition_result";
+    | "competition_invite" | "competition_day" | "competition_result"
+    | "competition_day_won";
   actor_id: string;
   actor_name: string;
   actor_avatar: string;
@@ -37,6 +38,7 @@ const iconMap: Record<string, any> = {
   competition_invite: Trophy,
   competition_day: Trophy,
   competition_result: Crown,
+  competition_day_won: Crown,
 };
 
 const getActionText = (notif: Notification) => {
@@ -54,6 +56,7 @@ const getActionText = (notif: Notification) => {
     case "competition_invite": return "invited you to a challenge";
     case "competition_day": return "New theme of the day — record yours!";
     case "competition_result": return "The challenge results are in!";
+    case "competition_day_won": return "Your story won the day!";
     default: return "interacted";
   }
 };

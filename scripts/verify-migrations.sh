@@ -370,6 +370,45 @@ check "l'invité rejoint le défi privé par son lien" "1" \
 check "et le voit enfin" "1" \
   "$(as authenticated "$C_OUT" "SELECT count(*) FROM competitions WHERE id='$INV';" 2>/dev/null)"
 
+# --- Les jetons d'appareil.
+#
+#     Un jeton est un moyen d'atteindre quelqu'un : le lire ou en déposer un au
+#     nom d'autrui, c'est détourner ses notifications.
+as authenticated "$C_OWNER" "SELECT register_device_token('jeton-du-proprietaire','ios');" >/dev/null 2>&1 || true
+check "on enregistre son propre appareil" "1" \
+  "$(q "SELECT count(*) FROM device_tokens WHERE user_id='$C_OWNER'")"
+check "le jeton d'autrui reste invisible" "0" \
+  "$(as authenticated "$C_OUT" "SELECT count(*) FROM device_tokens;" 2>/dev/null)"
+as authenticated "$C_OUT" "INSERT INTO device_tokens (user_id,token) VALUES ('$C_OWNER','jeton-vole');" >/dev/null 2>&1 || true
+check "on ne dépose pas un jeton au nom d'un autre" "0" \
+  "$(q "SELECT count(*) FROM device_tokens WHERE token='jeton-vole'")"
+
+# Le même téléphone qui change de compte doit CHANGER de propriétaire, pas se
+# dupliquer : sinon les notifications du nouveau compte partent vers l'ancien.
+as authenticated "$C_OUT" "SELECT register_device_token('jeton-du-proprietaire','ios');" >/dev/null 2>&1 || true
+check "un appareil réenregistré change de main" "$C_OUT" \
+  "$(q "SELECT user_id FROM device_tokens WHERE token='jeton-du-proprietaire'")"
+check "et ne se duplique pas" "1" \
+  "$(q "SELECT count(*) FROM device_tokens WHERE token='jeton-du-proprietaire'")"
+
+# --- Le registre des récompenses annoncées : il n'existe que pour empêcher la
+#     tâche planifiée de renotifier les mêmes gagnants à chaque passage.
+AWARD_DAY=$(q "SELECT id FROM competition_days WHERE competition_id='$PUB' AND day_index=2")
+q "INSERT INTO competition_day_awards (day_id,user_id) VALUES ('$AWARD_DAY','$C_MEMBER')" >/dev/null
+q "INSERT INTO competition_day_awards (day_id,user_id) VALUES ('$AWARD_DAY','$C_MEMBER')" >/dev/null 2>&1 \
+  && check "un gagnant n'est annoncé qu'une fois" "refusé" "accepté" \
+  || check "un gagnant n'est annoncé qu'une fois" "refusé" "refusé"
+
+# Un jour sans le moindre vote se marque quand même dépouillé, sinon la tâche
+# le rouvrirait indéfiniment. La marque porte un user_id nul.
+q "INSERT INTO competition_day_awards (day_id,user_id) VALUES ('$FUTDAY',NULL)" >/dev/null
+q "INSERT INTO competition_day_awards (day_id,user_id) VALUES ('$FUTDAY',NULL)" >/dev/null 2>&1 \
+  && check "« personne n'a gagné » ne se marque qu'une fois" "refusé" "accepté" \
+  || check "« personne n'a gagné » ne se marque qu'une fois" "refusé" "refusé"
+
+check "le nouveau type de notification est accepté" "1" \
+  "$(q "INSERT INTO notifications (user_id,type) VALUES ('$C_OWNER','competition_day_won'); SELECT count(*) FROM notifications WHERE type='competition_day_won'")"
+
 as authenticated "$C_MEMBER" "INSERT INTO competition_templates (key,name) VALUES ('pirate','Pirate');" >/dev/null 2>&1 || true
 check "personne ne crée de modèle" "0" "$(q "SELECT count(*) FROM competition_templates WHERE key='pirate'")"
 

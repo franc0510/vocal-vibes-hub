@@ -97,12 +97,13 @@ export const useRealtimeNotifications = () => {
             // notification » — le type existe, le texte manquait.
             competition_invite: "invited you to a challenge",
             competition_day: "New theme of the day — record yours!",
+            competition_day_won: "Your story won the day!",
             competition_result: "The challenge results are in!",
           };
 
           // Weekly winner is a self-notification — celebratory, no actor name
           if (notif.type === "weekly_winner") {
-            await fire("VocMe of the Week 🏆", "👑 Congrats! Your VocMe was crowned VocMe of the Week!", {
+            await fire("VocMe of the Week", "Congrats! Your VocMe was crowned VocMe of the Week!", {
               postId: notif.post_id,
             });
             return;
@@ -136,6 +137,9 @@ export const useRealtimeNotifications = () => {
           await fire("VocMe", pushBody, {
             postId: notif.post_id || undefined,
             actorId: notif.actor_id || undefined,
+            // Une notification de défi n'a ni post ni auteur : sans son
+            // identifiant de compétition, taper dessus n'ouvrait rien.
+            competitionId: (notif as { competition_id?: string }).competition_id || undefined,
           });
         }
       )
@@ -145,16 +149,33 @@ export const useRealtimeNotifications = () => {
   }, [user?.id]);
 };
 
+/**
+ * Un identifiant pour une notification de ce pont, et pour lui seul.
+ *
+ * Il tirait dans 0–1 000 000, ce qui recouvrait TOUTES les bandes réservées —
+ * dont 700 000–799 999, celle des rappels de thème du matin. Un like reçu
+ * pouvait donc écraser un rappel encore en attente, sans que rien ne le
+ * signale. Chaque famille a maintenant la sienne : 1800 et 1900 pour les
+ * rappels fixes, 500 000+ pour les illustrations, 700 000+ pour les thèmes,
+ * 900 000+ ici.
+ */
+const BRIDGE_ID_BASE = 900_000;
+export const bridgeNotificationId = () =>
+  BRIDGE_ID_BASE + Math.floor(Math.random() * 100_000);
+
 async function fire(
   title: string,
   body: string,
-  extra?: { postId?: string; actorId?: string }
+  // Le gestionnaire de tap donne la priorité à `dayId` puis `competitionId`,
+  // qui n'étaient jamais transmis : une notification de défi n'ouvrait rien
+  // d'utile.
+  extra?: { postId?: string; actorId?: string; competitionId?: string; dayId?: string }
 ) {
   if (Capacitor.isNativePlatform()) {
     try {
       await LocalNotifications.schedule({
         notifications: [{
-          id: Math.floor(Math.random() * 1_000_000),
+          id: bridgeNotificationId(),
           title,
           body,
           sound: "default",

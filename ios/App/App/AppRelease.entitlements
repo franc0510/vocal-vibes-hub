@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Sans cette clé, iOS refuse purement et simplement de délivrer un jeton
+	     d'appareil : l'enregistrement échoue et aucune notification distante
+	     ne peut arriver. `production` fonctionne aussi pour un build de
+	     développement signé avec un profil de développement. -->
+	<key>aps-environment</key>
+	<string>production</string>
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>

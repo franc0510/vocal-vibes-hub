@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMicrophone } from "@/hooks/useMicrophone";
 import { useGroups, type Group } from "@/hooks/useGroups";
 import { useTodayTheme } from "@/hooks/useTodayTheme";
+import { refreshDayReminders } from "@/hooks/useCompetitionDayNotifications";
 import { transcribeAudio } from "@/services/transcriptionService";
 import { measureAudioDurationMs, resolveDurationMs } from "@/lib/audioDuration";
 
@@ -317,6 +318,11 @@ const RecordPage = () => {
        * avait porté — au point de republier pour en avoir le cœur net. Le défi
        * montre l'anecdote dans l'urne du jour, prête à être écoutée et votée.
        */
+      // Le rappel de 9 h de ce jour-là n'a plus lieu d'être : on vient d'y
+      // répondre. Sans ce signal il sonnerait quand même demain matin, la
+      // condition ayant été figée à la planification.
+      if (todayTheme) refreshDayReminders();
+
       navigate(todayTheme ? `/competitions/${todayTheme.competitionId}` : "/");
     } catch (err: any) { toast.error(err.message || "Failed to publish"); }
     finally { setPublishing(false); }
