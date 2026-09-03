@@ -26,12 +26,14 @@ interface Props {
   currentDay: CompetitionDay | null;
   timezone: string;
   isMember: boolean;
+  /** Ce que rapporte la meilleure anecdote du jour, tel que réglé par l'organisateur. */
+  bonus: number;
   /** Le jour en cours n'accepte des anecdotes que si l'on joue. */
   onRecord?: () => void;
 }
 
 const CompetitionDayBallot = ({
-  competitionId, days, currentDay, timezone, isMember, onRecord,
+  competitionId, days, currentDay, timezone, isMember, bonus, onRecord,
 }: Props) => {
   const navigate = useNavigate();
 
@@ -60,6 +62,9 @@ const CompetitionDayBallot = ({
 
   if (!day) return null;
 
+  /** Le·s gagnant·s d'une urne dépouillée — vide tant qu'elle est ouverte. */
+  const winners = entries.filter((e) => e.isWinner);
+
   const countdown = formatCountdown(msUntilRollover(new Date(), timezone));
 
   const vote = async (postId: string) => {
@@ -83,15 +88,15 @@ const CompetitionDayBallot = ({
       <div className="flex items-center justify-between mb-2 gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5 min-w-0">
           <Vote size={12} className="shrink-0" />
-          <span className="truncate">Today's stories</span>
+          <span className="truncate">{isSettled ? "The day's stories" : "Vote for today's best"}</span>
         </h2>
         {isOpen ? (
           <span className="text-[11px] text-muted-foreground shrink-0">
-            Results in {countdown}
+            Votes close in {countdown}
           </span>
         ) : isSettled ? (
           <span className="text-[11px] text-amber-400 flex items-center gap-1 shrink-0">
-            <Lock size={10} /> Counted
+            <Lock size={10} /> Votes counted
           </span>
         ) : null}
       </div>
@@ -118,7 +123,22 @@ const CompetitionDayBallot = ({
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground mb-2 truncate">{day.theme}</p>
+      <p className="text-[11px] text-muted-foreground mb-1 truncate">{day.theme}</p>
+
+      {/*
+        La règle du jeu, en toutes lettres.
+        
+        Elle n'apparaissait nulle part : on voyait une liste, des boutons qui
+        manquaient sur certaines lignes, et un compte à rebours sans savoir ce
+        qu'il décomptait. Une seule phrase règle les trois.
+      */}
+      {!isSettled && (
+        <p className="text-[11px] text-muted-foreground mb-2">
+          {isMember
+            ? `One vote each — not for your own story. The most-voted one wins +${bonus} points when votes close at 4am.`
+            : `Join this challenge to vote. The most-voted story wins +${bonus} points.`}
+        </p>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
@@ -167,13 +187,22 @@ const CompetitionDayBallot = ({
                   </p>
                 </div>
 
-                <span className="text-[11px] text-amber-400 font-medium tabular-nums shrink-0 flex items-center gap-0.5">
-                  <Crown size={10} className="fill-amber-400" />
+                {/* Le compteur ne porte plus la couronne : elle désigne le
+                    vainqueur, et la voir sur chaque ligne laissait croire que
+                    tout le monde avait gagné. */}
+                <span className={`text-[11px] font-medium tabular-nums shrink-0 flex items-center gap-0.5 ${
+                  entry.isWinner ? "text-amber-400" : "text-muted-foreground"
+                }`}>
+                  <Vote size={10} />
                   {entry.votes}
                 </span>
 
-                {/* On ne vote pas pour soi, ni sur une urne scellée : le bouton
-                    disparaît plutôt que d'être proposé puis refusé. */}
+                {/*
+                  On ne vote pas pour soi. Le bouton disparaissait alors sans un
+                  mot, et une anecdote seule en lice n'affichait aucun bouton du
+                  tout — d'où l'impression que le vote ne marchait pas. On dit
+                  désormais pourquoi.
+                */}
                 {isOpen && isMember && !entry.isMine && (
                   <button
                     onClick={() => vote(entry.postId)}
@@ -181,8 +210,11 @@ const CompetitionDayBallot = ({
                       chosen ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
                     }`}
                   >
-                    {chosen ? "My vote" : "Vote"}
+                    {chosen ? "Voted" : "Vote"}
                   </button>
+                )}
+                {isOpen && isMember && entry.isMine && (
+                  <span className="text-[10px] text-muted-foreground shrink-0 px-2">Yours</span>
                 )}
               </motion.div>
             );
@@ -193,9 +225,18 @@ const CompetitionDayBallot = ({
       {entries.length > 0 && (
         <p className="text-[11px] text-muted-foreground mt-2">
           {isSettled
-            ? `${totalVotes} vote(s) · the best story took the bonus.`
+            ? winners.length === 0
+              ? "Nobody voted that day, so no bonus was awarded."
+              : winners.length === 1
+              ? `${winners[0].isMine ? "You" : winners[0].authorName} won the day — +${bonus} points.`
+              // Les ex æquo gagnent tous : un bonus n'est qu'un nombre, le
+              // retirer à deux personnes pour cause de coïncidence les
+              // punirait d'un hasard.
+              : `${winners.length} stories tied — each took +${bonus} points.`
             : isOpen
-            ? `${totalVotes} vote(s) · the bonus lands when votes are counted, in ${countdown}.`
+            ? myVote
+              ? `Your vote is in. ${totalVotes} so far.`
+              : `${totalVotes} vote(s) so far — yours is still missing.`
             : `${totalVotes} vote(s).`}
         </p>
       )}

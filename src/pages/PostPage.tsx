@@ -247,10 +247,16 @@ const PostPage = () => {
   // Same test as the feed: an anecdote whose MP4 exists is watchable even
   // before its panel rows are loaded, so video_url counts on its own.
   const hasSlideshow = panels.length > 0 || Boolean(post.video_url);
+  // `parseSegments` rend NULL — et non un tableau vide — quand l'anecdote n'a
+  // pas encore de segments horodatés. C'est le cas de toute anecdote tant que
+  // sa transcription tourne en tâche de fond, donc de toutes celles qu'on
+  // vient d'enregistrer. Lire `.length` dessus levait, et faisait de la page
+  // un écran blanc — le chemin le plus courant d'un défi : on publie, on tape
+  // sur son anecdote dans l'urne, plus rien.
   const segments = parseSegments(post.transcription_segments);
   // Live captions need timestamps, not pictures. Text without them keeps the
   // printed block further down.
-  const hasCaptions = segments.length > 0;
+  const hasCaptions = (segments?.length ?? 0) > 0;
   // duration_ms is the measured length; `duration` is a whole-second counter
   // and always a little short, which slid every panel out of step with the
   // voice — the same shortfall that used to cut the closing words.
