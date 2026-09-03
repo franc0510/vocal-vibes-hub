@@ -119,7 +119,7 @@ const CompetitionEditPage = () => {
         description: description.trim() || undefined,
         prize: prize.trim() || undefined,
         visibility,
-        startsOn: new Date(`${startsOn}T00:00:00`),
+        startsOn,
         template,
         teams: teams
           .map((t) => t.trim())
@@ -192,8 +192,17 @@ const CompetitionEditPage = () => {
           <input className={field} value={prize} onChange={(e) => setPrize(e.target.value)} placeholder="The prize — beer and pizza night…" />
           <textarea className={`${field} h-20 resize-none`} value={description}
                     onChange={(e) => setDescription(e.target.value)} placeholder="Description" />
+          {/* `min` : un jour déjà commencé est refusé par la base, autant ne pas
+              le proposer. Aujourd'hui reste choisissable — c'est le cas le plus
+              courant, et c'est précisément celui qui était cassé. */}
           {!editing && (
-            <input className={field} type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
+            <input
+              className={field}
+              type="date"
+              value={startsOn}
+              min={competitionDate(new Date(), DEFAULT_TIMEZONE)}
+              onChange={(e) => setStartsOn(e.target.value)}
+            />
           )}
           <div className="flex gap-2">
             {(["private", "public"] as const).map((v) => (

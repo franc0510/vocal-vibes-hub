@@ -12,6 +12,8 @@
  * « scalable » veut dire ici.
  */
 
+import { addDays } from "./competitionClock";
+
 export interface TemplateDay {
   day_index: number;
   theme: string;
@@ -114,13 +116,15 @@ export const TEMPLATES: CompetitionTemplate[] = [
   },
 ];
 
-/** Les valeurs qu'un modèle donne à la compétition qu'il amorce. */
-export function fromTemplate(template: CompetitionTemplate, startsOn: Date) {
-  const dayDate = (offset: number) => {
-    const d = new Date(startsOn);
-    d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
-  };
+/**
+ * Les valeurs qu'un modèle donne à la compétition qu'il amorce.
+ *
+ * `startsOn` est une date civile en `YYYY-MM-DD`, et non un `Date` : un jour de
+ * défi n'a pas d'heure, et le faire passer par un instant le décalait d'un jour
+ * dans tout fuseau à l'est de Greenwich.
+ */
+export function fromTemplate(template: CompetitionTemplate, startsOn: string) {
+  const dayDate = (offset: number) => addDays(startsOn, offset);
   return {
     template_key: template.key,
     description: template.description,

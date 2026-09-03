@@ -88,7 +88,10 @@ async function creer() {
   if (!modele) throw new Error(`Modèle inconnu : ${cle}`);
 
   const debut = arg("debut") ?? new Date().toISOString().slice(0, 10);
-  const seed = fromTemplate(modele, new Date(`${debut}T00:00:00Z`));
+  // Une date civile, jamais un instant : passer par `new Date` décale le jour
+  // de départ d'un cran dans tout fuseau à l'est de Greenwich, et la base
+  // refuse alors le jour 1 d'un défi qui démarre le jour même.
+  const seed = fromTemplate(modele, debut);
   const equipes = (arg("equipes") ?? "").split(",").map((e) => e.trim()).filter(Boolean);
   const privee = arg("visibilite") !== "public";
 

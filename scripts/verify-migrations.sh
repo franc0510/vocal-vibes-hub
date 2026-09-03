@@ -333,6 +333,43 @@ check "une compétition publique reçoit un code" "6" \
 check "les codes sont uniques" "0" \
   "$(q "SELECT count(*) FROM (SELECT join_code FROM competitions WHERE join_code IS NOT NULL GROUP BY join_code HAVING count(*)>1) x")"
 
+# --- L'invitation : se lire avant d'être acceptée.
+#
+#     La politique de lecture ne parle que de « publique, propriétaire, membre ».
+#     Un défi PRIVÉ était donc invisible à qui détenait pourtant son code — si
+#     bien que « rejoindre avec un code », seule raison d'être de ce champ pour
+#     une privée, ne fonctionnait pour personne.
+INV=$(q "INSERT INTO competitions (owner_id,name,visibility,starts_on,ends_on,prize) VALUES ('$C_OWNER','Invitation','private',CURRENT_DATE,CURRENT_DATE+6,'Une soirée') RETURNING id")
+INV_CODE=$(q "SELECT join_code FROM competitions WHERE id='$INV'")
+q "INSERT INTO competition_teams (competition_id,name) VALUES ('$INV','Rouge'),('$INV','Bleue')" >/dev/null
+
+check "un défi privé reste illisible en direct" "0" \
+  "$(as authenticated "$C_OUT" "SELECT count(*) FROM competitions WHERE join_code='$INV_CODE';" 2>/dev/null)"
+check "mais son invitation se lit avec le code" "t" \
+  "$(as authenticated "$C_OUT" "SELECT public.competition_invite_preview('$INV_CODE') IS NOT NULL;" 2>/dev/null)"
+check "l'invitation se lit même sans compte" "t" \
+  "$(psql -d "$DB" -q -tAc "SET ROLE anon; SELECT public.competition_invite_preview('$INV_CODE') IS NOT NULL;" 2>/dev/null)"
+check "elle annonce les équipes, qu'on choisit avant d'entrer" "2" \
+  "$(as authenticated "$C_OUT" "SELECT jsonb_array_length(public.competition_invite_preview('$INV_CODE')->'teams');" 2>/dev/null)"
+check "elle porte le lot" "Une soirée" \
+  "$(as authenticated "$C_OUT" "SELECT public.competition_invite_preview('$INV_CODE')->>'prize';" 2>/dev/null)"
+check "un code inconnu ne mène à rien" "" \
+  "$(as authenticated "$C_OUT" "SELECT public.competition_invite_preview('ZZZZZZ');" 2>/dev/null)"
+check "un code vide ne rend pas la première venue" "" \
+  "$(as authenticated "$C_OUT" "SELECT public.competition_invite_preview('');" 2>/dev/null)"
+check "la casse et les espaces n'empêchent rien" "t" \
+  "$(as authenticated "$C_OUT" "SELECT public.competition_invite_preview('  $(echo "$INV_CODE" | tr 'A-Z' 'a-z')  ') IS NOT NULL;" 2>/dev/null)"
+check "elle ne divulgue pas la liste des membres" "f" \
+  "$(as authenticated "$C_OUT" "SELECT public.competition_invite_preview('$INV_CODE') ? 'members';" 2>/dev/null)"
+
+# Et l'invité peut effectivement entrer, puis voit le défi.
+INV_TEAM=$(q "SELECT id FROM competition_teams WHERE competition_id='$INV' AND name='Rouge'")
+as authenticated "$C_OUT" "INSERT INTO competition_members (competition_id,user_id,team_id) VALUES ('$INV','$C_OUT','$INV_TEAM');" >/dev/null 2>&1 || true
+check "l'invité rejoint le défi privé par son lien" "1" \
+  "$(q "SELECT count(*) FROM competition_members WHERE competition_id='$INV' AND user_id='$C_OUT'")"
+check "et le voit enfin" "1" \
+  "$(as authenticated "$C_OUT" "SELECT count(*) FROM competitions WHERE id='$INV';" 2>/dev/null)"
+
 as authenticated "$C_MEMBER" "INSERT INTO competition_templates (key,name) VALUES ('pirate','Pirate');" >/dev/null 2>&1 || true
 check "personne ne crée de modèle" "0" "$(q "SELECT count(*) FROM competition_templates WHERE key='pirate'")"
 

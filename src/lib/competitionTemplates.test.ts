@@ -32,7 +32,9 @@ describe("les modèles", () => {
 });
 
 describe("fromTemplate", () => {
-  const start = new Date("2026-10-05T00:00:00Z");
+  // Une date civile, pas un instant : un jour de défi n'a pas d'heure, et le
+  // faire passer par un `Date` le décalait d'un jour à l'est de Greenwich.
+  const start = "2026-10-05";
 
   it("cale la fin sur le nombre de jours, sans durée en dur", () => {
     const ecoles = fromTemplate(TEMPLATES.find((t) => t.key === "inter-ecoles")!, start);
@@ -65,5 +67,38 @@ describe("fromTemplate", () => {
     // demander au modèle.
     expect(t.scoring).toEqual(TEMPLATES[0].default_scoring);
     expect(t.scoring).not.toBe(TEMPLATES[0].default_scoring);
+  });
+});
+
+describe("un défi qui démarre le jour même", () => {
+  /**
+   * Le bug que ce test aurait attrapé.
+   *
+   * L'ancien calcul passait la date de départ par `new Date("…T00:00:00")`,
+   * donc par un instant interprété en heure LOCALE. À Paris, minuit local est
+   * la veille à 22 h UTC : réécrite avec `toISOString()`, la date du jour 1
+   * devenait HIER. La base la refusait — elle n'accepte pas un jour déjà
+   * passé — et la création échouait en bloc, sans qu'on comprenne pourquoi.
+   *
+   * En UTC le calcul tombait juste, donc ni les tests ni la CI ne le voyaient.
+   * La suite tourne désormais à l'heure de Paris (`vitest.config.ts`), ce qui
+   * met ce test en position de refuser un retour en arrière.
+   */
+  it("garde la date de départ exactement telle qu'elle a été choisie", () => {
+    for (const start of ["2026-09-03", "2026-01-01", "2026-06-21", "2026-12-31"]) {
+      const seeded = fromTemplate(TEMPLATES[0], start);
+      expect(seeded.starts_on).toBe(start);
+      expect(seeded.days[0].date).toBe(start);
+    }
+  });
+
+  it("aligne chaque jour sur son rang, sans trou ni décalage", () => {
+    const seeded = fromTemplate(TEMPLATES[0], "2026-09-03");
+    // Sept jours consécutifs pour le défi inter-écoles.
+    expect(seeded.days.map((d) => d.date)).toEqual([
+      "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06",
+      "2026-09-07", "2026-09-08", "2026-09-09",
+    ]);
+    expect(seeded.ends_on).toBe("2026-09-09");
   });
 });
