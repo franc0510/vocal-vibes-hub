@@ -17,6 +17,7 @@ import { inviteUrl } from "@/lib/appUrl";
 import { useCompetition } from "@/hooks/useCompetition";
 import { useCompetitions } from "@/hooks/useCompetitions";
 import { useCompetitionScores } from "@/hooks/useCompetitionScores";
+import { weightsFrom } from "@/lib/competitionScoring";
 
 /**
  * Une compétition : le thème du jour, l'urne, et les deux classements.
@@ -339,6 +340,7 @@ const CompetitionPage = () => {
             currentDay={currentDay}
             timezone={timezone}
             isMember={isMember}
+            bonus={weightsFrom(competition.scoring).bonus}
             onRecord={currentDay ? () => navigate(`/record?competitionDay=${currentDay.id}`) : undefined}
           />
         )}

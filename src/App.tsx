@@ -23,6 +23,7 @@ import CompetitionPage from "@/pages/CompetitionPage";
 import CompetitionEditPage from "@/pages/CompetitionEditPage";
 import NotFound from "./pages/NotFound";
 import JoinChallengePage from "@/pages/JoinChallengePage";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useDailyNotification } from "@/hooks/useDailyNotification";
 import { useWeeklyNotifications } from "@/hooks/useWeeklyNotifications";
@@ -144,6 +145,10 @@ const AppRoutes = () => {
           contenter de masquer le prochain. */}
       <div className="w-full flex-1 overflow-y-auto overflow-x-hidden min-h-0">
         <div className="max-w-lg w-full mx-auto h-full">
+          {/* Un écran qui tombe doit le DIRE. Sans cette barrière, React
+              démonte tout l'arbre et il ne reste qu'une page blanche, sans le
+              moindre indice sur ce qui a cassé. */}
+          <ErrorBoundary>
           <Routes>
             <Route path="/auth" element={<AuthRoute><AuthPage /></AuthRoute>} />
             <Route path="/" element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
@@ -174,6 +179,7 @@ const AppRoutes = () => {
             <Route path="/weekly" element={<ProtectedRoute><WeeklyPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </ErrorBoundary>
         </div>
       </div>
       <ProtectedNavWrapper />

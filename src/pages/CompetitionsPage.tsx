@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Trophy, Plus, Users, Calendar, KeyRound, ChevronRight } from "lucide-react";
+import { Trophy, Plus, Users, Calendar, KeyRound, ChevronRight, Mic, Check } from "lucide-react";
 import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { useCompetitions, type Competition } from "@/hooks/useCompetitions";
 import { competitionDate, DEFAULT_TIMEZONE } from "@/lib/competitionClock";
+import { useChallengeDigest, sortDigests, type ChallengeDigest } from "@/hooks/useChallengeDigest";
 
 /**
  * L'écran d'accueil des défis — celui qui remplace Weekly dans la nav.
@@ -32,40 +33,100 @@ const statusOf = (c: Competition) => {
   return { label: "Live", tone: "text-primary" };
 };
 
-const CompetitionCard = ({ competition, onOpen }: { competition: Competition; onOpen: () => void }) => {
+/**
+ * Une ligne de la liste.
+ *
+ * Elle ne disait que le nom et la durée : pour connaître le thème du jour, ou
+ * savoir si l'on avait déjà répondu, il fallait ouvrir le défi. Les deux
+ * choses qu'on vient chercher le matin sont maintenant sur la carte.
+ */
+const CompetitionCard = ({
+  digest,
+  onOpen,
+  onRecord,
+}: {
+  digest: ChallengeDigest;
+  onOpen: () => void;
+  onRecord?: () => void;
+}) => {
+  const { competition, theme, dayIndex, hasPosted, needsMe, state } = digest;
   const status = statusOf(competition);
   return (
-    <motion.button
-      whileTap={{ scale: 0.98 }}
-      onClick={onOpen}
-      className="w-full text-left bg-card border border-border/40 rounded-2xl p-4 flex items-center gap-3"
+    <div
+      className={`w-full bg-card border rounded-2xl overflow-hidden ${
+        needsMe ? "border-primary/50" : "border-border/40"
+      }`}
     >
-      <div className="w-11 h-11 rounded-xl gradient-red flex items-center justify-center shrink-0">
-        <Trophy size={20} className="text-primary-foreground" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold text-foreground truncate">{competition.name}</p>
-        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground min-w-0">
-          <span className={status.tone}>{status.label}</span>
-          <span className="flex items-center gap-1">
-            <Calendar size={11} />{dayCount(competition)} days
-          </span>
-          {competition.prize && (
-            <span className="flex items-center gap-1 min-w-0">
-              <Trophy size={11} className="text-amber-400 shrink-0" />
-              <span className="truncate">{competition.prize}</span>
+      <motion.button
+        whileTap={{ scale: 0.98 }}
+        onClick={onOpen}
+        className="w-full text-left p-4 flex items-center gap-3"
+      >
+        <div className="w-11 h-11 rounded-xl gradient-red flex items-center justify-center shrink-0">
+          <Trophy size={20} className="text-primary-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-foreground truncate">{competition.name}</p>
+          <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground min-w-0">
+            <span className={status.tone}>{status.label}</span>
+            <span className="flex items-center gap-1">
+              <Calendar size={11} />{dayCount(competition)} days
             </span>
+            {competition.prize && (
+              <span className="flex items-center gap-1 min-w-0">
+                <Trophy size={11} className="text-amber-400 shrink-0" />
+                <span className="truncate">{competition.prize}</span>
+              </span>
+            )}
+          </div>
+        </div>
+        <ChevronRight size={18} className="text-muted-foreground shrink-0" />
+      </motion.button>
+
+      {/* Le thème du jour, lisible sans ouvrir le défi. */}
+      {state === "live" && theme && (
+        <div className="px-4 pb-3 -mt-1">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Day {dayIndex} · today's theme
+          </p>
+          <p className="text-sm font-medium text-foreground leading-snug break-words">{theme}</p>
+
+          {hasPosted ? (
+            <p className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <Check size={12} className="text-primary shrink-0" /> You've told yours today
+            </p>
+          ) : (
+            onRecord && (
+              <button
+                onClick={onRecord}
+                className="mt-2 w-full rounded-xl gradient-red text-primary-foreground text-sm font-medium py-2 flex items-center justify-center gap-1.5"
+              >
+                <Mic size={14} /> Tell yours
+              </button>
+            )
           )}
         </div>
-      </div>
-      <ChevronRight size={18} className="text-muted-foreground shrink-0" />
-    </motion.button>
+      )}
+    </div>
   );
 };
 
 const CompetitionsPage = () => {
   const navigate = useNavigate();
   const { mine, open, loading, join, findByCode } = useCompetitions();
+  const { digests } = useChallengeDigest(mine);
+
+  /**
+   * Trois listes plutôt qu'une.
+   *
+   * Un défi qui court, un qui commence dans trois jours et un qui s'est
+   * terminé la semaine dernière n'appellent pas la même chose, et les mêler
+   * obligeait à lire chaque étiquette pour trier soi-même.
+   */
+  const live = sortDigests(digests.filter((d) => d.state === "live"));
+  const upcoming = sortDigests(digests.filter((d) => d.state === "upcoming"));
+  const over = digests.filter((d) => d.state === "over");
+  const waiting = live.filter((d) => d.needsMe).length;
   const [code, setCode] = useState("");
   const [joining, setJoining] = useState(false);
 
@@ -124,13 +185,55 @@ const CompetitionsPage = () => {
           </div>
         )}
 
-        {mine.length > 0 && (
+        {live.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate">Live now</span>
+              {/* Le compte de ce qui reste à faire, avant même de lire la
+                  liste : c'est la seule question qu'on se pose le matin. */}
+              {waiting > 0 && (
+                <span className="text-primary normal-case tracking-normal shrink-0">
+                  {waiting} waiting for you
+                </span>
+              )}
+            </h2>
+            {live.map((d) => (
+              <CompetitionCard
+                key={d.competition.id}
+                digest={d}
+                onOpen={() => navigate(`/competitions/${d.competition.id}`)}
+                onRecord={d.dayId ? () => navigate(`/record?competitionDay=${d.dayId}`) : undefined}
+              />
+            ))}
+          </section>
+        )}
+
+        {upcoming.length > 0 && (
           <section className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Where I play
+              Starting soon
             </h2>
-            {mine.map((c) => (
-              <CompetitionCard key={c.id} competition={c} onOpen={() => navigate(`/competitions/${c.id}`)} />
+            {upcoming.map((d) => (
+              <CompetitionCard
+                key={d.competition.id}
+                digest={d}
+                onOpen={() => navigate(`/competitions/${d.competition.id}`)}
+              />
+            ))}
+          </section>
+        )}
+
+        {over.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Finished
+            </h2>
+            {over.map((d) => (
+              <CompetitionCard
+                key={d.competition.id}
+                digest={d}
+                onOpen={() => navigate(`/competitions/${d.competition.id}`)}
+              />
             ))}
           </section>
         )}
@@ -141,7 +244,14 @@ const CompetitionsPage = () => {
               <Users size={12} /> Open to everyone
             </h2>
             {open.map((c) => (
-              <CompetitionCard key={c.id} competition={c} onOpen={() => navigate(`/competitions/${c.id}`)} />
+              <CompetitionCard
+                key={c.id}
+                digest={{
+                  competition: c, state: "upcoming", theme: null, dayId: null,
+                  dayIndex: null, hasPosted: false, needsMe: false,
+                }}
+                onOpen={() => navigate(`/competitions/${c.id}`)}
+              />
             ))}
           </section>
         )}
