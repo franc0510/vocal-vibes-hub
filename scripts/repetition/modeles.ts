@@ -32,7 +32,8 @@ for (const t of TEMPLATES) {
   );
 }
 
-const seed = fromTemplate(template, new Date("2026-10-05T00:00:00Z"));
+// Une date civile, pas un instant : un jour de défi n'a pas d'heure.
+const seed = fromTemplate(template, "2026-10-05");
 const COMP = "eeeeeeee-0000-0000-0000-00000000000e";
 
 out.push(`INSERT INTO auth.users (id) VALUES ('eeeeeeee-1111-0000-0000-000000000001')

@@ -25,6 +25,12 @@ function setupDeeplinkListener(): Promise<void> {
     urlOpenListener = App.addListener("appUrlOpen", async (event) => {
       console.log("�� Deeplink received:", event.url);
 
+      // Une invitation n'est pas un retour d'authentification. Sans cette
+      // exclusion, `vocme://join/ABC123` était avalé ici — la condition
+      // acceptait TOUT lien commençant par `vocme://` — et l'invitation
+      // disparaissait au profit d'une attente de session qui n'arrivait jamais.
+      if (event.url.startsWith("vocme://join/")) return;
+
       if (event.url.includes("auth") || event.url.includes("callback") || event.url.startsWith("vocme://")) {
         // Close the browser
         try {

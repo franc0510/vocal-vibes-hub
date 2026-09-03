@@ -207,3 +207,23 @@ export function instantAt(
 export function themeIsRevealed(dayDate: string, today: string): boolean {
   return dayDate <= today;
 }
+
+/**
+ * Le jour civil, `n` jours plus tard. Jamais par un instant.
+ *
+ * `new Date("2026-09-03T00:00:00")` est interprété en heure LOCALE : à Paris
+ * cet instant est le 2 septembre à 22 h UTC, si bien qu'un
+ * `toISOString().slice(0, 10)` derrière rend « 2026-09-02 ». Choisir
+ * « aujourd'hui » comme départ enregistrait donc le jour 1 à HIER — que la
+ * base refuse — et la création échouait entièrement. Le bug est invisible en
+ * UTC, donc invisible en test et en CI : il ne se voyait qu'à l'est de
+ * Greenwich, c'est-à-dire sur le téléphone de l'utilisateur.
+ *
+ * Ici on ne quitte jamais le calendrier : `Date.UTC` sert de calculette à
+ * jours, pas d'horloge.
+ */
+export function addDays(dayDate: string, days: number): string {
+  const [year, month, day] = dayDate.split("-").map(Number);
+  const shifted = Date.UTC(year, month - 1, day) + days * 86_400_000;
+  return new Date(shifted).toISOString().slice(0, 10);
+}

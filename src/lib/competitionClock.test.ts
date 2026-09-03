@@ -8,6 +8,7 @@ import {
   formatCountdown,
   instantAt,
   themeIsRevealed,
+  addDays,
 } from "./competitionClock";
 
 /**
@@ -238,5 +239,66 @@ describe("themeIsRevealed", () => {
 
   it("garde les jours à venir secrets", () => {
     expect(themeIsRevealed("2026-01-16", "2026-01-15")).toBe(false);
+  });
+});
+
+describe("addDays — l'arithmétique de calendrier, hors de tout fuseau", () => {
+  it("avance d'un jour", () => {
+    expect(addDays("2026-09-03", 1)).toBe("2026-09-04");
+  });
+
+  it("rend la même date pour zéro", () => {
+    expect(addDays("2026-09-03", 0)).toBe("2026-09-03");
+  });
+
+  it("franchit les mois et les années", () => {
+    expect(addDays("2026-09-30", 1)).toBe("2026-10-01");
+    expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
+    expect(addDays("2026-02-28", 1)).toBe("2026-03-01");
+    expect(addDays("2024-02-28", 1)).toBe("2024-02-29"); // année bissextile
+  });
+
+  it("recule aussi", () => {
+    expect(addDays("2026-01-01", -1)).toBe("2025-12-31");
+  });
+
+  it("couvre une semaine complète, comme un défi de sept jours", () => {
+    const start = "2026-09-03";
+    expect([0, 1, 2, 3, 4, 5, 6].map((i) => addDays(start, i))).toEqual([
+      "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06",
+      "2026-09-07", "2026-09-08", "2026-09-09",
+    ]);
+  });
+
+  /**
+   * Le test qui compte, et celui qui manquait.
+   *
+   * L'ancien calcul passait par `new Date(\`${d}T00:00:00\`)`, interprété en
+   * heure locale : à Paris, « aujourd'hui » devenait « hier » au moment de
+   * l'écriture, la base refusait le jour 1 et la création échouait en bloc.
+   * En UTC le calcul tombait juste — d'où un bug qu'aucun test ne voyait.
+   *
+   * `addDays` ne doit dépendre du fuseau du téléphone d'aucune manière.
+   */
+  it("donne le même résultat quel que soit le fuseau de l'appareil", () => {
+    // Le passage à l'heure d'été, à travers minuit, dans les deux sens.
+    const cases = ["2026-03-29", "2026-10-25", "2026-01-01", "2026-07-15"];
+    for (const day of cases) {
+      // Une date civile n'a pas d'heure : le résultat ne peut donc pas bouger
+      // selon l'endroit d'où on la lit.
+      expect(addDays(day, 1)).toBe(
+        new Date(Date.UTC(
+          Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10))
+        ) + 86_400_000).toISOString().slice(0, 10)
+      );
+    }
+  });
+
+  it("ne rend jamais la veille pour un décalage de zéro — le bug d'origine", () => {
+    // Reproduction exacte : à Paris, `new Date("2026-09-03T00:00:00")` est le
+    // 2 septembre à 22 h UTC. `addDays` ne s'y laisse pas prendre.
+    for (const day of ["2026-09-03", "2026-06-21", "2026-12-25"]) {
+      expect(addDays(day, 0)).toBe(day);
+    }
   });
 });

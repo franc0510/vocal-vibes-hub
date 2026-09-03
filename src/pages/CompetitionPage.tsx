@@ -13,6 +13,7 @@ import CompetitionDayBallot from "@/components/CompetitionDayBallot";
 import {
   DEFAULT_TIMEZONE, formatCountdown, msUntilRollover, themeIsRevealed,
 } from "@/lib/competitionClock";
+import { inviteUrl } from "@/lib/appUrl";
 import { useCompetition } from "@/hooks/useCompetition";
 import { useCompetitions } from "@/hooks/useCompetitions";
 import { useCompetitionScores } from "@/hooks/useCompetitionScores";
@@ -52,6 +53,7 @@ const CompetitionPage = () => {
   const [picking, setPicking] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Sans équipes, l'onglet « équipes » n'aurait rien à montrer.
   useEffect(() => {
@@ -123,8 +125,16 @@ const CompetitionPage = () => {
     );
   }
 
-  const inviteText = competition.join_code
-    ? `Join "${competition.name}" on VocMe with code ${competition.join_code}!`
+  /**
+   * Le lien d'invitation.
+   *
+   * Bâti sur l'origine déclarée et non sur `window.location.origin` : dans
+   * l'application iOS, cette dernière vaut `capacitor://localhost` et
+   * produirait un lien mort pour tous ceux qui le reçoivent.
+   */
+  const link = competition.join_code ? inviteUrl(competition.join_code) : null;
+  const inviteText = link
+    ? `Join "${competition.name}" on VocMe: ${link}`
     : `Join "${competition.name}" on VocMe!`;
 
   const copyCode = async () => {
@@ -139,10 +149,26 @@ const CompetitionPage = () => {
     }
   };
 
+  const copyLink = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Could not copy the link.");
+    }
+  };
+
   const shareInvite = async () => {
     try {
-      if (navigator.share) await navigator.share({ text: inviteText });
-      else {
+      // L'URL est aussi dans le texte : plusieurs applications de messagerie
+      // ignorent le champ `url` de la feuille de partage et n'enverraient que
+      // la phrase, sans le lien.
+      if (navigator.share) {
+        await navigator.share(link ? { text: inviteText, url: link } : { text: inviteText });
+      } else {
         await navigator.clipboard.writeText(inviteText);
         toast.success("Invite copied");
       }
@@ -568,8 +594,22 @@ const CompetitionPage = () => {
                 </button>
               )}
 
+              {link && (
+                <button
+                  onClick={copyLink}
+                  className="w-full rounded-xl border border-border/50 bg-background px-4 py-3 flex items-center justify-between gap-3 text-left"
+                >
+                  <span className="text-xs text-muted-foreground min-w-0 truncate">{link}</span>
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-primary shrink-0">
+                    {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                    {copiedLink ? "Copied" : "Copy link"}
+                  </span>
+                </button>
+              )}
+
               <p className="text-sm text-muted-foreground">
-                Anyone can join from the Challenges tab with this code.
+                The link opens the challenge straight away. The code works too,
+                from the Challenges tab.
               </p>
 
               <button

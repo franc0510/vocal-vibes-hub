@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import FeedPage from "@/pages/FeedPage";
 import SearchPage from "@/pages/SearchPage";
@@ -22,6 +22,7 @@ import CompetitionsPage from "@/pages/CompetitionsPage";
 import CompetitionPage from "@/pages/CompetitionPage";
 import CompetitionEditPage from "@/pages/CompetitionEditPage";
 import NotFound from "./pages/NotFound";
+import JoinChallengePage from "@/pages/JoinChallengePage";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useDailyNotification } from "@/hooks/useDailyNotification";
 import { useWeeklyNotifications } from "@/hooks/useWeeklyNotifications";
@@ -29,6 +30,7 @@ import { useCompetitionDayNotifications } from "@/hooks/useCompetitionDayNotific
 import { useStoryIllustrationNotifications } from "@/hooks/useStoryIllustrationNotifications";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { useEffect } from "react";
+import { takePendingInvite } from "@/lib/pendingInvite";
 import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -46,11 +48,19 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/" replace />;
+  if (user) {
+    // Une invitation en attente reprend la main : sans ça, celui qui vient de
+    // créer son compte pour rejoindre un défi atterrissait sur le fil, et
+    // devait redemander le code à celui qui l'avait invité.
+    const invite = takePendingInvite();
+    return <Navigate to={invite ? `/join/${invite}` : "/"} replace />;
+  }
   return <>{children}</>;
 };
 
 const AppRoutes = () => {
+  const navigate = useNavigate();
+
   useDailyNotification();
   useWeeklyNotifications();
   useCompetitionDayNotifications();
@@ -63,7 +73,21 @@ const AppRoutes = () => {
 
     const handleAppUrlOpen = async ({ url }: { url: string }) => {
       console.log("🔗 App URL opened:", url);
-      
+
+      /**
+       * Une invitation, et non un retour d'authentification.
+       *
+       * Ce gestionnaire ne regardait QUE le fragment `#` : tout lien profond
+       * portant un chemin — `vocme://join/ABC123` — était reçu puis ignoré en
+       * silence. On le traite en premier, avant même de fermer le navigateur
+       * intégré, parce qu'aucun navigateur n'est ouvert dans ce cas.
+       */
+      const invite = url.match(/^vocme:\/\/join\/([A-Za-z0-9]+)/i);
+      if (invite) {
+        navigate(`/join/${invite[1].toUpperCase()}`);
+        return;
+      }
+
       // Close the in-app browser
       try { await Browser.close(); } catch {}
 
@@ -88,8 +112,12 @@ const AppRoutes = () => {
               console.error("❌ Session error:", error);
             } else {
               console.log("✅ Session set successfully:", data.user?.id);
-              // Force a page reload to update the auth state
-              window.location.href = "/";
+              // Rechargement complet pour rafraîchir l'état d'authentification.
+              // Une invitation retenue survit, elle, dans `localStorage` — et
+              // c'est ici qu'elle reprend la main, sinon le détour par Safari
+              // la perdrait définitivement.
+              const pending = takePendingInvite();
+              window.location.href = pending ? `/join/${pending}` : "/";
             }
           } catch (err) {
             console.error("❌ Failed to set session:", err);
@@ -98,11 +126,13 @@ const AppRoutes = () => {
       }
     };
 
-    CapApp.addListener("appUrlOpen", handleAppUrlOpen);
-    return () => {
-      CapApp.removeAllListeners();
-    };
-  }, []);
+    // On garde la poignée pour ne retirer QUE cet écouteur : l'ancien
+    // `removeAllListeners()` supprimait aussi celui de `nativeAuthService`,
+    // qui attend le retour d'authentification.
+    let handle: { remove: () => void } | undefined;
+    CapApp.addListener("appUrlOpen", handleAppUrlOpen).then((h) => { handle = h; });
+    return () => { handle?.remove(); };
+  }, [navigate]);
 
   // `w-full` et non `w-screen` : `100vw` peut dépasser la largeur réellement
   // visible et suffit à faire partir toute l'application de travers.
@@ -128,6 +158,11 @@ const AppRoutes = () => {
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/groups" element={<ProtectedRoute><GroupsPage /></ProtectedRoute>} />
+            {/* Hors de ProtectedRoute, délibérément : quelqu'un qui reçoit une
+                invitation n'a pas encore de compte, et doit voir à quoi on
+                l'invite avant de s'inscrire. La page gère elle-même la
+                connexion, et retient le code au passage. */}
+            <Route path="/join/:code" element={<JoinChallengePage />} />
             <Route path="/competitions" element={<ProtectedRoute><CompetitionsPage /></ProtectedRoute>} />
             {/* Avant /competitions/:id, sinon « new » serait pris pour un identifiant. */}
             <Route path="/competitions/new" element={<ProtectedRoute><CompetitionEditPage /></ProtectedRoute>} />

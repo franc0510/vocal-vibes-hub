@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { db } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
 import { TEMPLATES, fromTemplate, type CompetitionTemplate } from "@/lib/competitionTemplates";
-import { competitionDate, DEFAULT_TIMEZONE } from "@/lib/competitionClock";
+import { addDays, competitionDate, DEFAULT_TIMEZONE } from "@/lib/competitionClock";
+import { fetchInvite } from "./useCompetitionInvite";
 import { DEFAULT_WEIGHTS, type ScoringWeights } from "@/lib/competitionScoring";
 
 /**
@@ -106,7 +107,15 @@ export const useCompetitions = () => {
       description?: string;
       prize?: string;
       visibility: "public" | "private";
-      startsOn: Date;
+      /**
+       * Le jour du départ, en `YYYY-MM-DD`.
+       *
+       * Une date civile et non un `Date` : un jour de défi n'a pas d'heure, et
+       * le faire transiter par un instant le décalait d'un jour dans tout
+       * fuseau à l'est de Greenwich — au point qu'un défi démarrant le jour
+       * même était refusé par la base.
+       */
+      startsOn: string;
       template?: CompetitionTemplate | null;
       teams?: { name: string; color: string }[];
       days?: { day_index: number; theme: string }[];
@@ -118,11 +127,11 @@ export const useCompetitions = () => {
       const seed = template ? fromTemplate(template, input.startsOn) : null;
 
       const days = input.days ?? seed?.days ?? [];
-      const dated = days.map((d) => {
-        const date = new Date(input.startsOn);
-        date.setDate(date.getDate() + d.day_index - 1);
-        return { day_index: d.day_index, theme: d.theme, date: date.toISOString().slice(0, 10) };
-      });
+      const dated = days.map((d) => ({
+        day_index: d.day_index,
+        theme: d.theme,
+        date: addDays(input.startsOn, d.day_index - 1),
+      }));
       if (dated.length === 0) throw new Error("A challenge needs at least one day.");
 
       const { data: created, error } = await db
@@ -133,7 +142,7 @@ export const useCompetitions = () => {
           description: input.description ?? seed?.description ?? null,
           prize: input.prize ?? null,
           visibility: input.visibility,
-          starts_on: input.startsOn.toISOString().slice(0, 10),
+          starts_on: input.startsOn,
           // La durée n'est pas un réglage : c'est le nombre de jours.
           ends_on: dated[dated.length - 1].date,
           // L'écran de création propose déjà un barème, pré-rempli depuis le
@@ -215,13 +224,19 @@ export const useCompetitions = () => {
     [user, refresh]
   );
 
+  /**
+   * Retrouve un défi par son code de partage.
+   *
+   * Passe par `competition_invite_preview` et non par une lecture directe :
+   * la politique de lecture de `competitions` ignore le code d'invitation, si
+   * bien qu'un défi PRIVÉ restait invisible à qui n'était pas déjà membre.
+   * « Rejoindre avec un code » ne fonctionnait donc que pour les défis
+   * publics, et répondait « No challenge with that code » pour les autres —
+   * alors que le code est précisément le sésame d'un défi privé.
+   */
   const findByCode = useCallback(async (code: string) => {
-    const { data } = await db
-      .from("competitions")
-      .select("*")
-      .eq("join_code", code.trim().toUpperCase())
-      .maybeSingle();
-    return (data ?? null) as Competition | null;
+    const preview = await fetchInvite(code);
+    return preview ? ({ id: preview.id, name: preview.name } as Pick<Competition, "id" | "name">) : null;
   }, []);
 
   return { mine, open, loading, refresh, create, join, findByCode, templates: TEMPLATES };
