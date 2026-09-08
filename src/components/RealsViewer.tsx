@@ -6,7 +6,7 @@ import CommentsPanel from "./CommentsPanel";
 import SharePanel from "./SharePanel";
 import LikesListModal from "./LikesListModal";
 import { useVoicePosts, type VoicePostWithAuthor } from "@/hooks/useVoicePosts";
-import { newestFirst } from "@/lib/feedOrder";
+import { narrowsFeed, selectFeed } from "@/lib/feedFilter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWeeklyVocme } from "@/hooks/useWeeklyVocme";
 import { playExclusive, releaseAudio } from "@/lib/audioManager";
@@ -547,29 +547,34 @@ const RealsViewer = ({ filterFriends = false, friendIds = [], filterGroupId, fil
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  const posts = filterUserId
-    // Chronological, newest first — the order the profile grid displays. The
-    // feed's ordering (illustrated first, then engagement bands, shuffled)
-    // makes sense for discovery, but it left the reader on a different
-    // anecdote from the tile they had just touched.
-    ? newestFirst(allPosts.filter((p) => p.user_id === filterUserId && !p.group_id))
-    : filterGroupId
-    ? allPosts.filter((p) => (p as any).group_id === filterGroupId)
-    : filterAllGroups
-    ? allPosts.filter((p) => !!(p as any).group_id)
-    : filterFriends
-    ? allPosts.filter((p) => friendIds.includes(p.user_id))
-    : allPosts.filter((p) => !(p as any).group_id); // "For you" hides group-only posts
+  const filter = { filterUserId, filterGroupId, filterAllGroups, filterFriends };
+  const posts = selectFeed(allPosts, filter, friendIds);
 
   // Opening on a chosen anecdote — a tile tapped in Explore — happens in two
   // beats, because the feed reveals five posts at a time and the target may
   // sit deeper: first ask the hook to include it, then, once it is rendered,
   // jump to it. `auto` rather than `smooth`: this is where the screen starts,
   // not a movement the reader should watch.
-  // A profile is a finite set — load it whole rather than five at a time.
+  /**
+   * Un feed restreint se charge EN ENTIER avant d'être filtré.
+   *
+   * C'est le correctif du bug « je dépose un vocme sur un groupe et je ne le
+   * vois pas ». Le hook n'expose que les cinq premières anecdotes de l'ordre
+   * global ; filtrer cette fenêtre-là ne montrait une anecdote de groupe que
+   * si elle y tombait par hasard. Et c'était sans issue : la suite ne se
+   * charge qu'en approchant de la fin de la liste affichée, or une liste vide
+   * n'a pas de fin.
+   *
+   * La règle valait déjà pour un profil — elle vaut pour tout sous-ensemble
+   * fini. Seul « For you », qui n'a pas de fin, garde ses paquets de cinq.
+   */
+  // `allPosts.length` compte : un rafraîchissement — il en part un à chaque
+  // écriture temps réel — ramène la liste visible à cinq. Sans cette
+  // dépendance, l'onglet d'un groupe se reviderait au premier like venu.
+  const isNarrowed = narrowsFeed(filter);
   useEffect(() => {
-    if (filterUserId) revealAll();
-  }, [filterUserId, allPosts.length, revealAll]);
+    if (isNarrowed) revealAll();
+  }, [isNarrowed, allPosts.length, revealAll]);
 
   const jumpedRef = useRef(false);
   const [startMissing, setStartMissing] = useState(false);
