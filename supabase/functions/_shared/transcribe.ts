@@ -29,6 +29,98 @@ function cleanSegments(segments: TranscriptSegment[]): TranscriptSegment[] {
   return segments.filter((s) => s.text.trim() && s.end_ms > s.start_ms);
 }
 
+/**
+ * Les formats que l'API de transcription d'OpenAI accepte, tels qu'elle les
+ * énumère quand elle refuse un fichier.
+ */
+const OPENAI_AUDIO_FORMATS = [
+  "flac", "m4a", "mp3", "mp4", "mpeg", "mpga", "oga", "ogg", "wav", "webm",
+];
+
+const TYPE_BY_EXTENSION: Record<string, string> = {
+  flac: "audio/flac",
+  m4a: "audio/mp4",
+  mp3: "audio/mpeg",
+  mp4: "audio/mp4",
+  mpeg: "audio/mpeg",
+  mpga: "audio/mpeg",
+  oga: "audio/ogg",
+  ogg: "audio/ogg",
+  wav: "audio/wav",
+  webm: "audio/webm",
+};
+
+/**
+ * Le chemin inverse, déclaré plutôt que déduit.
+ *
+ * Plusieurs extensions partagent un même type — `oga` et `ogg`, `m4a` et
+ * `mp4` — si bien qu'inverser la table ci-dessus rendrait la première venue,
+ * donc l'ordre d'écriture des clés. Ce qu'on choisit ici est délibéré.
+ */
+const EXTENSION_BY_TYPE: Record<string, string> = {
+  "audio/flac": "flac",
+  "audio/mp4": "m4a",
+  "video/mp4": "mp4",
+  "audio/mpeg": "mp3",
+  "audio/ogg": "ogg",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav",
+  "audio/webm": "webm",
+  "video/webm": "webm",
+  "audio/aac": "m4a",
+};
+
+/**
+ * Sous quel nom et quel type présenter l'enregistrement à Whisper.
+ *
+ * LE BUG QUE CECI RÈGLE, et il suffisait à tout arrêter.
+ *
+ * Le fichier était envoyé en dur comme `audio.mp3`, type `audio/mpeg` — quoi
+ * qu'il fût réellement. Or VocMe n'a jamais produit un seul MP3 : iOS
+ * enregistre en `audio/mp4`, les navigateurs en WebM. OpenAI décide du format
+ * par le NOM et le TYPE de la partie envoyée, pas par les octets ; recevant du
+ * MP4 déguisé en MP3, elle répond 400 « Invalid file format » et rien n'est
+ * jamais transcrit.
+ *
+ * Le défaut restait invisible tant que le projet ne tenait que `FAL_KEY` :
+ * fal reçoit une URL et va chercher le fichier lui-même, sans qu'on ait à le
+ * nommer. Le jour où `OPENAI_API_KEY` a été posée, `transcribe()` a basculé
+ * sur ce chemin-ci — et la transcription s'est arrêtée pour toute anecdote
+ * publiée depuis.
+ *
+ * On lit donc l'extension réelle de l'URL, et l'en-tête du fichier téléchargé
+ * quand l'URL ne dit rien.
+ */
+export function audioFilePart(
+  audioUrl: string,
+  contentType?: string | null
+): { name: string; type: string } {
+  // L'URL de Supabase Storage peut porter une requête (`?token=…`).
+  const path = (audioUrl || "").split(/[?#]/)[0];
+  // Le DERNIER SEGMENT, et non l'URL entière : un nom d'hôte contient des
+  // points, et découper l'adresse complète prendrait « co/storage/audio/file »
+  // pour une extension.
+  const file = path.split("/").pop() ?? "";
+  const found = file.includes(".") ? (file.split(".").pop() ?? "").toLowerCase() : "";
+
+  // L'AAC brut ne figure pas dans la liste d'OpenAI, alors qu'il s'agit du
+  // même flux que ce qu'un conteneur MP4 transporte : le nommer .m4a le fait
+  // accepter, au lieu d'être rejeté sur son seul suffixe.
+  const normalized = found === "aac" ? "m4a" : found;
+
+  const fromHeader = (contentType ?? "").split(";")[0].trim().toLowerCase();
+  const headerExt = EXTENSION_BY_TYPE[fromHeader];
+
+  // Dernier recours : le format qu'iOS produit, et sur lequel le enregistreur
+  // du client se rabat déjà. Surtout pas MP3, que rien ici ne fabrique.
+  const ext = OPENAI_AUDIO_FORMATS.includes(normalized)
+    ? normalized
+    : headerExt ?? "m4a";
+
+  return { name: `audio.${ext}`, type: TYPE_BY_EXTENSION[ext] ?? "audio/mp4" };
+}
+
 async function transcribeWithOpenAI(
   input: TranscribeInput,
   apiKey: string
@@ -39,8 +131,11 @@ async function transcribeWithOpenAI(
   }
   const audioBuffer = await audioResponse.arrayBuffer();
 
+  // Le fichier tel qu'il est, et non déguisé en MP3 : voir `audioFilePart`.
+  const part = audioFilePart(input.audioUrl, audioResponse.headers.get("content-type"));
+
   const form = new FormData();
-  form.append("file", new Blob([audioBuffer], { type: "audio/mpeg" }), "audio.mp3");
+  form.append("file", new Blob([audioBuffer], { type: part.type }), part.name);
   form.append("model", "whisper-1");
   // verbose_json is what carries the per-segment timestamps.
   form.append("response_format", "verbose_json");
