@@ -1,8 +1,25 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/og-group.ts": {
+      "includeFiles": "api/assets/**"
+    }
+  },
   "rewrites": [
     {
-      "source": "/((?!assets/|.*\\.[a-zA-Z0-9]+$).*)",
+      "//": "Les robots des messageries d'abord : eux seuls reçoivent la page aux balises Open Graph. Un humain garde l'application, donc un aperçu raté ne peut pas casser le chemin normal.",
+      "source": "/join-group/:code",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(facebookexternalhit|facebookcatalog|WhatsApp|Twitterbot|Slackbot|Slack-ImgProxy|Discordbot|TelegramBot|LinkedInBot|Pinterest|redditbot|Applebot|Googlebot|Google-InspectionTool|bingbot|SkypeUriPreview|vkShare|W3C_Validator|Iframely|embedly|Snapchat|Mastodon|Bluesky|Signal).*"
+        }
+      ],
+      "destination": "/api/join-group?code=:code"
+    },
+    {
+      "source": "/((?!api/|assets/|.*\\.[a-zA-Z0-9]+$).*)",
       "destination": "/index.html"
     }
   ]
