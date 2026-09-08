@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { supportedRecorderMime, recordedMime } from "@/lib/recorderMime";
+import { supportedRecorderMime, recordedMime, extensionFor } from "@/lib/recorderMime";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Square, Send, Loader2, MicOff, AlertCircle, Settings, Image as ImageIcon, MapPin, Play, Pause, Trash2, X, Sparkles } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -234,13 +234,16 @@ const RecordPage = () => {
 
     setPublishing(true);
     try {
-      // Déterminer l'extension depuis le type MIME
-      let ext = "mp4"; // Par défaut MP4
-      if (audioBlob.type.includes("webm")) ext = "webm";
-      else if (audioBlob.type.includes("ogg")) ext = "ogg";
-      else if (audioBlob.type.includes("aac")) ext = "aac";
-
-      const fileName = `${user.id}/${Date.now()}.${ext}`;
+      /**
+       * L'extension vient du helper partagé, plus d'une copie locale.
+       *
+       * Celle-ci en divergeait sur deux points, et tous deux comptent pour la
+       * transcription : elle écrivait `.mp4` là où le helper dit `.m4a`, et
+       * surtout elle pouvait déposer un `.aac` — un suffixe que l'API de
+       * transcription d'OpenAI n'accepte pas, alors que le même flux nommé
+       * `.m4a` passe sans broncher.
+       */
+      const fileName = `${user.id}/${Date.now()}.${extensionFor(audioBlob.type)}`;
       console.log("📤 Uploading:", fileName, "Type:", audioBlob.type);
       
       const { error: uploadError } = await supabase.storage
