@@ -417,6 +417,91 @@ q "INSERT INTO notifications (user_id,type) VALUES ('$C_OWNER','competition_day'
 check "une notification système passe sans auteur" "1" \
   "$(q "SELECT count(*) FROM notifications WHERE type='competition_day'")"
 
+# Les groupes : le code de partage et le lien d'invitation.
+#
+# Un groupe donne accès aux anecdotes qu'on y publie. Le code est donc ce qui
+# tient la porte, et ces vérifications disent exactement ça : il ne se lit pas
+# de l'extérieur, et il n'existe aucun chemin qui s'en passe.
+echo "▸ Groupes"
+G_OWNER="$OWNER"
+G_GUEST=$(q "INSERT INTO auth.users (id) VALUES (gen_random_uuid()) RETURNING id")
+G_OUT=$(q "INSERT INTO auth.users (id) VALUES (gen_random_uuid()) RETURNING id")
+q "INSERT INTO profiles (id, display_name, username) VALUES ('$G_OWNER','Camille','camille')
+   ON CONFLICT (id) DO UPDATE SET display_name='Camille', username='camille'" >/dev/null
+
+GRP=$(q "INSERT INTO groups (name, owner_id) VALUES ('Les colocs','$G_OWNER') RETURNING id")
+q "INSERT INTO group_members (group_id,user_id) VALUES ('$GRP','$G_OWNER')" >/dev/null
+G_CODE=$(q "SELECT join_code FROM groups WHERE id='$GRP'")
+
+check "un groupe naît avec un code" "6" "$(q "SELECT coalesce(length(join_code),0) FROM groups WHERE id='$GRP'")"
+check "les codes de groupe sont uniques" "0" \
+  "$(q "SELECT count(*) FROM (SELECT join_code FROM groups WHERE join_code IS NOT NULL GROUP BY join_code HAVING count(*)>1) x")"
+
+# Le point sensible : un code lisible par tous n'est pas un code. `groups` se
+# lisait avec « USING (true) », donc tous les codes étaient publics.
+check "un étranger ne lit pas le groupe, donc pas son code" "0" \
+  "$(as authenticated "$G_OUT" "SELECT count(*) FROM groups WHERE id='$GRP';" 2>/dev/null)"
+check "le propriétaire lit le sien" "1" \
+  "$(as authenticated "$G_OWNER" "SELECT count(*) FROM groups WHERE id='$GRP';" 2>/dev/null)"
+
+# L'autre porte dérobée : s'ajouter soi-même à n'importe quel groupe suffisait
+# à en lire les anecdotes, sans jamais avoir été invité.
+as authenticated "$G_OUT" "INSERT INTO group_members (group_id,user_id) VALUES ('$GRP','$G_OUT');" >/dev/null 2>&1 || true
+check "on ne s'ajoute pas à un groupe sans son code" "0" \
+  "$(q "SELECT count(*) FROM group_members WHERE group_id='$GRP' AND user_id='$G_OUT'")"
+
+# L'invitation, elle, se lit avec le code — même sans compte.
+check "l'invitation se lit avec le code" "Les colocs" \
+  "$(as authenticated "$G_GUEST" "SELECT public.group_invite_preview('$G_CODE')->>'name';" 2>/dev/null)"
+check "elle se lit même sans compte" "t" \
+  "$(psql -d "$DB" -q -tAc "SET ROLE anon; SELECT public.group_invite_preview('$G_CODE') IS NOT NULL;" 2>/dev/null)"
+check "elle dit qui invite" "Camille" \
+  "$(as authenticated "$G_GUEST" "SELECT public.group_invite_preview('$G_CODE')->>'owner_name';" 2>/dev/null)"
+check "elle compte les membres" "1" \
+  "$(as authenticated "$G_GUEST" "SELECT public.group_invite_preview('$G_CODE')->>'member_count';" 2>/dev/null)"
+check "elle ne divulgue pas la liste des membres" "f" \
+  "$(as authenticated "$G_GUEST" "SELECT public.group_invite_preview('$G_CODE') ? 'members';" 2>/dev/null)"
+check "un code de groupe inconnu ne mène à rien" "" \
+  "$(as authenticated "$G_GUEST" "SELECT public.group_invite_preview('ZZZZZZ');" 2>/dev/null)"
+check "un code vide ne rend pas le premier groupe venu" "" \
+  "$(as authenticated "$G_GUEST" "SELECT public.group_invite_preview('');" 2>/dev/null)"
+check "la casse et les espaces n'empêchent rien" "t" \
+  "$(as authenticated "$G_GUEST" "SELECT public.group_invite_preview('  $(echo "$G_CODE" | tr 'A-Z' 'a-z')  ') IS NOT NULL;" 2>/dev/null)"
+
+# Et l'invité entre effectivement, par le seul chemin qui reste.
+check "l'invité entre avec le code" "Les colocs" \
+  "$(as authenticated "$G_GUEST" "SELECT public.join_group_with_code('$G_CODE')->>'name';" 2>/dev/null)"
+check "et voit enfin le groupe" "1" \
+  "$(as authenticated "$G_GUEST" "SELECT count(*) FROM groups WHERE id='$GRP';" 2>/dev/null)"
+as authenticated "$G_GUEST" "SELECT public.join_group_with_code('$G_CODE');" >/dev/null 2>&1 || true
+check "recliquer sur le lien n'ajoute pas une seconde fois" "1" \
+  "$(q "SELECT count(*) FROM group_members WHERE group_id='$GRP' AND user_id='$G_GUEST'")"
+
+# « Untel vous a ajouté » raconterait quelque chose de faux à qui vient
+# d'accepter une invitation de lui-même.
+check "entrer par le lien ne s'annonce pas comme un ajout" "0" \
+  "$(q "SELECT count(*) FROM notifications WHERE type='group_added' AND user_id='$G_GUEST'")"
+
+check "un code inconnu n'ouvre rien" "" \
+  "$(as authenticated "$G_OUT" "SELECT public.join_group_with_code('ZZZZZZ');" 2>/dev/null)"
+check "et n'ajoute personne" "0" \
+  "$(q "SELECT count(*) FROM group_members WHERE group_id='$GRP' AND user_id='$G_OUT'")"
+check "sans compte, on ne rejoint rien" "" \
+  "$(psql -d "$DB" -q -tAc "SET ROLE anon; SELECT public.join_group_with_code('$G_CODE');" 2>/dev/null)"
+
+# Ce qui marchait avant doit marcher encore : le propriétaire ajoute qui il
+# veut, et l'annonce part toujours.
+as authenticated "$G_OWNER" "INSERT INTO group_members (group_id,user_id) VALUES ('$GRP','$G_OUT');" >/dev/null 2>&1 || true
+check "le propriétaire ajoute encore un membre" "1" \
+  "$(q "SELECT count(*) FROM group_members WHERE group_id='$GRP' AND user_id='$G_OUT'")"
+check "et l'ajouté en est averti" "1" \
+  "$(q "SELECT count(*) FROM notifications WHERE type='group_added' AND user_id='$G_OUT'")"
+
+# On quitte un groupe sans demander la permission.
+as authenticated "$G_GUEST" "DELETE FROM group_members WHERE group_id='$GRP' AND user_id='$G_GUEST';" >/dev/null 2>&1 || true
+check "on quitte un groupe librement" "0" \
+  "$(q "SELECT count(*) FROM group_members WHERE group_id='$GRP' AND user_id='$G_GUEST'")"
+
 echo
 if [ "$failures" -eq 0 ]; then
   echo "✅ Tout est bon."

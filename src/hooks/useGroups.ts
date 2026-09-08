@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/supabase/untyped";
 import { useAuth } from "@/contexts/AuthContext";
 
 export interface Group {
@@ -7,6 +8,15 @@ export interface Group {
   name: string;
   owner_id: string;
   created_at: string;
+  /**
+   * Le code à dicter, à écrire au tableau, à coller dans une conversation.
+   *
+   * Posé par la base à la création, jamais par le client : un groupe se crée
+   * ici, mais aussi par script et par l'API, et un code posé à trois endroits
+   * est un code oublié à un quatrième. Nul pour les groupes que l'on n'a pas
+   * encore rechargés depuis la migration.
+   */
+  join_code: string | null;
 }
 
 export interface GroupMember {
@@ -102,6 +112,26 @@ export const useGroups = () => {
     if (error) throw error;
   };
 
+  /**
+   * Entrer dans un groupe par son code.
+   *
+   * Passe par `join_group_with_code` et non par une insertion directe : la
+   * politique d'insertion ne connaît que le propriétaire du groupe, et c'est
+   * cette fonction qui vérifie ce que RLS ne peut pas vérifier — la détention
+   * du code. Sans elle, s'ajouter soi-même à n'importe quel groupe suffisait
+   * à en lire les anecdotes.
+   *
+   * Rend `null` si le code ne mène nulle part, pour que l'écran dise « aucun
+   * groupe avec ce code » plutôt que « une erreur est survenue ».
+   */
+  const joinWithCode = async (code: string): Promise<Pick<Group, "id" | "name"> | null> => {
+    const { data, error } = await db.rpc("join_group_with_code", { code });
+    if (error) throw error;
+    if (!data) return null;
+    await fetchGroups();
+    return data as Pick<Group, "id" | "name">;
+  };
+
   const getMembers = async (groupId: string): Promise<string[]> => {
     const { data } = await (supabase as any)
       .from("group_members")
@@ -134,5 +164,8 @@ export const useGroups = () => {
     return () => { (supabase as any).removeChannel(channel); };
   }, [user?.id]);
 
-  return { groups, loading, fetchGroups, createGroup, deleteGroup, addMember, removeMember, getMembers };
+  return {
+    groups, loading, fetchGroups, createGroup, deleteGroup,
+    addMember, removeMember, getMembers, joinWithCode,
+  };
 };

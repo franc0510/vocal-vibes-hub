@@ -23,6 +23,7 @@ import CompetitionPage from "@/pages/CompetitionPage";
 import CompetitionEditPage from "@/pages/CompetitionEditPage";
 import NotFound from "./pages/NotFound";
 import JoinChallengePage from "@/pages/JoinChallengePage";
+import JoinGroupPage from "@/pages/JoinGroupPage";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useDailyNotification } from "@/hooks/useDailyNotification";
@@ -32,7 +33,7 @@ import { useStoryIllustrationNotifications } from "@/hooks/useStoryIllustrationN
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import { usePushRegistration } from "@/hooks/usePushRegistration";
 import { useEffect } from "react";
-import { takePendingInvite } from "@/lib/pendingInvite";
+import { invitePath, takePendingInvite } from "@/lib/pendingInvite";
 import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -52,10 +53,10 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   if (loading) return null;
   if (user) {
     // Une invitation en attente reprend la main : sans ça, celui qui vient de
-    // créer son compte pour rejoindre un défi atterrissait sur le fil, et
-    // devait redemander le code à celui qui l'avait invité.
+    // créer son compte pour rejoindre un défi ou un groupe atterrissait sur le
+    // fil, et devait redemander le code à celui qui l'avait invité.
     const invite = takePendingInvite();
-    return <Navigate to={invite ? `/join/${invite}` : "/"} replace />;
+    return <Navigate to={invite ? invitePath(invite) : "/"} replace />;
   }
   return <>{children}</>;
 };
@@ -85,6 +86,14 @@ const AppRoutes = () => {
        * silence. On le traite en premier, avant même de fermer le navigateur
        * intégré, parce qu'aucun navigateur n'est ouvert dans ce cas.
        */
+      // `join-group` d'abord : `^vocme://join` ne le distinguerait pas de
+      // `^vocme://join/`, et un groupe partirait alors vers l'écran des défis.
+      const groupInvite = url.match(/^vocme:\/\/join-group\/([A-Za-z0-9]+)/i);
+      if (groupInvite) {
+        navigate(`/join-group/${groupInvite[1].toUpperCase()}`);
+        return;
+      }
+
       const invite = url.match(/^vocme:\/\/join\/([A-Za-z0-9]+)/i);
       if (invite) {
         navigate(`/join/${invite[1].toUpperCase()}`);
@@ -120,7 +129,7 @@ const AppRoutes = () => {
               // c'est ici qu'elle reprend la main, sinon le détour par Safari
               // la perdrait définitivement.
               const pending = takePendingInvite();
-              window.location.href = pending ? `/join/${pending}` : "/";
+              window.location.href = pending ? invitePath(pending) : "/";
             }
           } catch (err) {
             console.error("❌ Failed to set session:", err);
@@ -170,6 +179,9 @@ const AppRoutes = () => {
                 l'invite avant de s'inscrire. La page gère elle-même la
                 connexion, et retient le code au passage. */}
             <Route path="/join/:code" element={<JoinChallengePage />} />
+            {/* Même raison, et même exception à ProtectedRoute : on rejoint un
+                groupe sur invitation, donc souvent sans compte encore. */}
+            <Route path="/join-group/:code" element={<JoinGroupPage />} />
             <Route path="/competitions" element={<ProtectedRoute><CompetitionsPage /></ProtectedRoute>} />
             {/* Avant /competitions/:id, sinon « new » serait pris pour un identifiant. */}
             <Route path="/competitions/new" element={<ProtectedRoute><CompetitionEditPage /></ProtectedRoute>} />

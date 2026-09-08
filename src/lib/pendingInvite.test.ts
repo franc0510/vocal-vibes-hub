@@ -3,6 +3,7 @@ import {
   rememberPendingInvite,
   takePendingInvite,
   forgetPendingInvite,
+  invitePath,
 } from "./pendingInvite";
 
 /**
@@ -19,12 +20,12 @@ describe("pendingInvite", () => {
 
   it("rend le code retenu", () => {
     rememberPendingInvite("ABC123");
-    expect(takePendingInvite()).toBe("ABC123");
+    expect(takePendingInvite()).toEqual({ code: "ABC123", kind: "challenge" });
   });
 
   it("normalise le code comme le fait la base", () => {
     rememberPendingInvite("  abc123  ");
-    expect(takePendingInvite()).toBe("ABC123");
+    expect(takePendingInvite()?.code).toBe("ABC123");
   });
 
   it("ne retient rien d'un code vide", () => {
@@ -38,7 +39,7 @@ describe("pendingInvite", () => {
    */
   it("s'oublie dès qu'on l'a reprise", () => {
     rememberPendingInvite("ABC123");
-    expect(takePendingInvite()).toBe("ABC123");
+    expect(takePendingInvite()?.code).toBe("ABC123");
     expect(takePendingInvite()).toBeNull();
   });
 
@@ -47,7 +48,7 @@ describe("pendingInvite", () => {
     vi.setSystemTime(new Date("2026-09-03T10:00:00Z"));
     rememberPendingInvite("ABC123");
     vi.setSystemTime(new Date("2026-09-03T10:59:00Z"));
-    expect(takePendingInvite()).toBe("ABC123");
+    expect(takePendingInvite()?.code).toBe("ABC123");
   });
 
   it("a péri à une heure et une minute", () => {
@@ -72,5 +73,30 @@ describe("pendingInvite", () => {
   it("ignore une note sans code", () => {
     localStorage.setItem("vocme_pending_invite", JSON.stringify({ at: Date.now() }));
     expect(takePendingInvite()).toBeNull();
+  });
+
+  /**
+   * Depuis que les groupes s'invitent aussi, le code seul ne suffit plus à
+   * savoir où retourner : les deux codes vivent dans des tables différentes,
+   * chacune avec sa propre unicité. Retenir l'espèce, c'est la seule garantie
+   * de ne pas rouvrir la mauvaise porte au retour de l'inscription.
+   */
+  it("distingue un groupe d'un défi", () => {
+    rememberPendingInvite("GRP456", "group");
+    expect(takePendingInvite()).toEqual({ code: "GRP456", kind: "group" });
+  });
+
+  it("renvoie chacun vers son écran", () => {
+    expect(invitePath({ code: "ABC123", kind: "challenge" })).toBe("/join/ABC123");
+    expect(invitePath({ code: "GRP456", kind: "group" })).toBe("/join-group/GRP456");
+  });
+
+  /** Les notes écrites avant les groupes ne pouvaient être que des défis. */
+  it("relit une note d'avant les groupes comme un défi", () => {
+    localStorage.setItem(
+      "vocme_pending_invite",
+      JSON.stringify({ code: "ABC123", at: Date.now() })
+    );
+    expect(takePendingInvite()).toEqual({ code: "ABC123", kind: "challenge" });
   });
 });
