@@ -42,10 +42,27 @@ export const APP_SCHEME = "vocme";
 export const APP_STORE_URL: string | null =
   import.meta.env.VITE_APP_STORE_URL || null;
 
+/** Un code de partage se normalise partout pareil : sans espaces, en capitales. */
+const normalize = (code: string): string => encodeURIComponent(code.trim().toUpperCase());
+
 /** Le lien d'invitation à partager. Celui qui se colle dans une conversation. */
-export const inviteUrl = (code: string): string =>
-  `${APP_ORIGIN}/join/${encodeURIComponent(code.trim().toUpperCase())}`;
+export const inviteUrl = (code: string): string => `${APP_ORIGIN}/join/${normalize(code)}`;
 
 /** Le même, pour ouvrir directement l'application installée. */
 export const inviteDeepLink = (code: string): string =>
-  `${APP_SCHEME}://join/${encodeURIComponent(code.trim().toUpperCase())}`;
+  `${APP_SCHEME}://join/${normalize(code)}`;
+
+/**
+ * Le lien d'invitation à un groupe.
+ *
+ * Un chemin distinct de celui des défis, et non un paramètre : les deux codes
+ * vivent dans des tables différentes, avec chacune leur unicité. Rien
+ * n'empêche le même code d'exister des deux côtés, et un `/join/ABC123`
+ * ambigu ouvrirait alors la mauvaise porte.
+ */
+export const groupInviteUrl = (code: string): string =>
+  `${APP_ORIGIN}/join-group/${normalize(code)}`;
+
+/** Le même, pour ouvrir directement l'application installée. */
+export const groupInviteDeepLink = (code: string): string =>
+  `${APP_SCHEME}://join-group/${normalize(code)}`;
