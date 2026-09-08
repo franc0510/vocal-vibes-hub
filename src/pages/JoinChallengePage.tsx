@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompetitions } from "@/hooks/useCompetitions";
 import { useCompetitionInvite } from "@/hooks/useCompetitionInvite";
-import { APP_STORE_URL, inviteDeepLink } from "@/lib/appUrl";
+import { inviteDeepLink } from "@/lib/appUrl";
+import { useOpenInApp } from "@/hooks/useOpenInApp";
 import { rememberPendingInvite } from "@/lib/pendingInvite";
 
 /**
@@ -32,9 +33,15 @@ const JoinChallengePage = () => {
 
   const [joining, setJoining] = useState(false);
   const [teamId, setTeamId] = useState<string | null>(null);
-  const [triedApp, setTriedApp] = useState(false);
 
   const isNative = Capacitor.isNativePlatform();
+
+  /** Le schème ne dit rien quand l'application est absente — voir le hook. */
+  const {
+    open: openInApp,
+    downloadUrl,
+    appMissing,
+  } = useOpenInApp(inviteDeepLink(code ?? ""));
 
   /**
    * Déjà membre : on n'a rien à demander, on ouvre.
@@ -76,12 +83,6 @@ const JoinChallengePage = () => {
     } finally {
       setJoining(false);
     }
-  };
-
-  /** Ouvrir dans l'application installée, si elle l'est. */
-  const openInApp = () => {
-    setTriedApp(true);
-    window.location.href = inviteDeepLink(code ?? "");
   };
 
   if (loading || authLoading) {
@@ -203,9 +204,9 @@ const JoinChallengePage = () => {
           {/*
             Sur le web, l'application installée fait mieux que le navigateur.
             Le schème `vocme://` l'ouvre — mais il ne dit rien quand elle est
-            absente, d'où le repli révélé seulement après une tentative, plutôt
-            qu'une redirection automatique qui déclencherait une alerte iOS
-            chez tous ceux qui n'ont pas l'application.
+            absente : le bouton restait mort, sans jamais proposer de
+            télécharger. `useOpenInApp` tente l'application, puis part vers la
+            boutique si rien ne s'est ouvert.
           */}
           {!isNative && !closed && (
             <div className="mt-4 text-center">
@@ -215,15 +216,17 @@ const JoinChallengePage = () => {
               >
                 <Smartphone size={14} /> Open in the VocMe app
               </button>
-              {triedApp && (
+              {appMissing && (
                 <p className="text-[11px] text-muted-foreground mt-2">
-                  Nothing happened?{" "}
-                  {APP_STORE_URL ? (
-                    <a href={APP_STORE_URL} className="text-primary underline">
-                      Get VocMe on the App Store
-                    </a>
+                  {downloadUrl ? (
+                    <>
+                      Taking you to the App Store —{" "}
+                      <a href={downloadUrl} className="text-primary underline">
+                        get VocMe
+                      </a>
+                    </>
                   ) : (
-                    "You can keep going right here in your browser."
+                    "Looks like you don't have the app. You can keep going right here in your browser."
                   )}
                 </p>
               )}
