@@ -277,6 +277,20 @@ const RecordPage = () => {
         illustration_requested: wantVideo,
         image_url: imageUrl,
         location: location.trim() || null,
+        /**
+         * Le choix de l'auteur, écrit tel quel.
+         *
+         * Il ne l'était PAS : l'insertion ne portait que `group_id`, jamais
+         * `visibility`. La colonne restant à son défaut 'public', choisir
+         * « Friends » ne changeait strictement rien — l'anecdote partait au
+         * monde entier. C'est l'autre moitié de « ça n'enregistre pas bien ».
+         *
+         * 'group' pour un dépôt de groupe : la politique de lecture branche
+         * d'abord sur `group_id`, mais si le groupe est un jour supprimé la
+         * colonne est mise à NULL, et cette valeur fait alors retomber
+         * l'anecdote sur « privée à son auteur » plutôt que sur « publique ».
+         */
+        visibility,
         ...(visibility === "group" && selectedGroupId ? { group_id: selectedGroupId } : {}),
         // Le jour est stocké sur l'anecdote, pas déduit de sa date : ça règle
         // le fuseau horaire et la publication à 00h05. Cette colonne n'entre
@@ -287,11 +301,21 @@ const RecordPage = () => {
       } as any).select().single();
       if (insertError) throw insertError;
 
+      // Nommer le groupe, plutôt qu'un « Published! » qui ne dit pas où.
+      // C'est la moitié du « je ne vois pas mon vocme » : rien, à la
+      // publication, ne confirmait que l'anecdote était bien allée au groupe.
+      const postedGroup =
+        visibility === "group" && selectedGroupId
+          ? groups.find((g) => g.id === selectedGroupId)
+          : undefined;
+
       toast.success(
         wantVideo
           ? "Published! We're drawing your story — we'll let you know."
           : todayTheme
           ? "Published! Your story is in today's running."
+          : postedGroup
+          ? `Published to ${postedGroup.name}!`
           : "Published!"
       );
       setTitle(""); setAudioBlob(null); setElapsed(0); setWantVideo(false);
@@ -317,7 +341,21 @@ const RecordPage = () => {
        * avait porté — au point de republier pour en avoir le cœur net. Le défi
        * montre l'anecdote dans l'urne du jour, prête à être écoutée et votée.
        */
-      navigate(todayTheme ? `/competitions/${todayTheme.competitionId}` : "/");
+      /**
+       * Et on atterrit là où l'anecdote se trouve.
+       *
+       * Le retour au feed était systématique, donc sur « For you » — l'onglet
+       * qui CACHE justement les anecdotes de groupe. On publiait dans un
+       * groupe et on revenait à un écran où elle ne pouvait pas être : de quoi
+       * conclure, à juste titre, qu'elle n'avait pas été enregistrée.
+       */
+      navigate(
+        todayTheme
+          ? `/competitions/${todayTheme.competitionId}`
+          : postedGroup
+          ? `/?group=${postedGroup.id}`
+          : "/"
+      );
     } catch (err: any) { toast.error(err.message || "Failed to publish"); }
     finally { setPublishing(false); }
   };

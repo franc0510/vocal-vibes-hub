@@ -33,14 +33,10 @@ export const APP_ORIGIN: string = (
 export const APP_SCHEME = "vocme";
 
 /**
- * La fiche App Store, si elle existe.
- *
- * Laissée vide tant qu'elle n'est pas renseignée : mieux vaut ne pas proposer
- * de bouton que d'en proposer un qui tombe sur une page d'erreur. Renseigner
- * `VITE_APP_STORE_URL` le fait apparaître, sans autre changement.
+ * La fiche App Store vit dans `appStore.ts`, avec la détection de plateforme
+ * et le renvoi vers la bonne boutique. Deux constantes pour la même variable
+ * d'environnement, c'est une de trop — et celle-ci ne normalisait rien.
  */
-export const APP_STORE_URL: string | null =
-  import.meta.env.VITE_APP_STORE_URL || null;
 
 /** Un code de partage se normalise partout pareil : sans espaces, en capitales. */
 const normalize = (code: string): string => encodeURIComponent(code.trim().toUpperCase());

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Heart, Users, MessageCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import NotificationsPanel from "@/components/NotificationsPanel";
 import RealsViewer from "@/components/RealsViewer";
 import { useFollows } from "@/hooks/useFollows";
@@ -10,9 +10,24 @@ import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
 const FeedPage = () => {
   const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
-  const [tab, setTab] = useState<"all" | "friends" | "group">("all");
+
+  /**
+   * `?group=<id>` ouvre le feed directement sur ce groupe.
+   *
+   * C'est par là qu'arrive celui qui vient de publier dans un groupe : le
+   * renvoi au feed le déposait sur « For you », qui cache les anecdotes de
+   * groupe, et il n'y trouvait donc jamais la sienne.
+   *
+   * Lu une seule fois, à l'ouverture : ensuite les onglets sont à lui, et
+   * suivre le paramètre le ramènerait de force sur le groupe à chaque fois
+   * qu'il en change.
+   */
+  const [searchParams] = useSearchParams();
+  const openOnGroup = searchParams.get("group");
+
+  const [tab, setTab] = useState<"all" | "friends" | "group">(openOnGroup ? "group" : "all");
   // "all" = all groups, or a specific group id
-  const [selectedGroupId, setSelectedGroupId] = useState<string>("all");
+  const [selectedGroupId, setSelectedGroupId] = useState<string>(openOnGroup ?? "all");
   const { followingIds } = useFollows();
   const { groups } = useGroups();
   const { unreadCount } = useUnreadNotifications();

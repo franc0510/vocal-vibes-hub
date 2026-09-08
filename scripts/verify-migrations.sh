@@ -458,10 +458,57 @@ check "le propriétaire ajoute encore un membre" "1" \
 check "et l'ajouté en est averti" "1" \
   "$(q "SELECT count(*) FROM notifications WHERE type='group_added' AND user_id='$G_OUT'")"
 
+# Une anecdote déposée sur un groupe.
+#
+# « Je dépose un vocme sur un groupe et je ne le vois pas » : le défaut était
+# côté écran, mais rien ici ne vérifiait la base, si bien qu'on ne pouvait pas
+# l'écarter d'un coup d'œil. Maintenant si.
+G_POST=$(as authenticated "$G_OWNER" "INSERT INTO voice_posts (user_id,title,audio_url,duration,group_id) VALUES ('$G_OWNER','Dans le groupe','u',12,'$GRP') RETURNING id;" 2>/dev/null)
+check "l'anecdote garde bien son groupe" "$GRP" \
+  "$(q "SELECT group_id FROM voice_posts WHERE id='$G_POST'")"
+check "un membre du groupe la voit" "1" \
+  "$(as authenticated "$G_GUEST" "SELECT count(*) FROM voice_posts WHERE id='$G_POST';" 2>/dev/null)"
+check "un étranger au groupe ne la voit pas" "0" \
+  "$(as authenticated "$C_MEMBER2" "SELECT count(*) FROM voice_posts WHERE id='$G_POST';" 2>/dev/null)"
+check "son auteur la voit" "1" \
+  "$(as authenticated "$G_OWNER" "SELECT count(*) FROM voice_posts WHERE id='$G_POST';" 2>/dev/null)"
+
 # On quitte un groupe sans demander la permission.
 as authenticated "$G_GUEST" "DELETE FROM group_members WHERE group_id='$GRP' AND user_id='$G_GUEST';" >/dev/null 2>&1 || true
 check "on quitte un groupe librement" "0" \
   "$(q "SELECT count(*) FROM group_members WHERE group_id='$GRP' AND user_id='$G_GUEST'")"
+
+# Et en partant, on cesse de la voir : c'est la même politique qui l'accorde.
+check "en quittant le groupe, on perd l'accès à ses anecdotes" "0" \
+  "$(as authenticated "$G_GUEST" "SELECT count(*) FROM voice_posts WHERE id='$G_POST';" 2>/dev/null)"
+
+# La visibilité hors groupe, que la même politique porte désormais. Elle était
+# jusqu'ici dans une SECONDE politique, et deux politiques permissives se
+# combinent par un OU : celle-ci suffisait à tout ouvrir, groupes compris.
+PUB_POST=$(q "INSERT INTO voice_posts (user_id,title,audio_url,duration,visibility) VALUES ('$G_OWNER','Publique','u',10,'public') RETURNING id")
+FRIENDS_POST=$(q "INSERT INTO voice_posts (user_id,title,audio_url,duration,visibility) VALUES ('$G_OWNER','Entre amis','u',10,'friends') RETURNING id")
+
+check "une anecdote publique se voit de tous" "1" \
+  "$(as authenticated "$G_OUT" "SELECT count(*) FROM voice_posts WHERE id='$PUB_POST';" 2>/dev/null)"
+check "une anecdote « friends » se cache d'un inconnu" "0" \
+  "$(as authenticated "$G_OUT" "SELECT count(*) FROM voice_posts WHERE id='$FRIENDS_POST';" 2>/dev/null)"
+q "INSERT INTO follows (follower_id, following_id) VALUES ('$G_OUT','$G_OWNER') ON CONFLICT DO NOTHING" >/dev/null 2>&1
+check "et se montre à qui suit son auteur" "1" \
+  "$(as authenticated "$G_OUT" "SELECT count(*) FROM voice_posts WHERE id='$FRIENDS_POST';" 2>/dev/null)"
+
+# Le point qui manquait : suivre l'auteur ne donne PAS accès à ce qu'il a
+# déposé dans un groupe. C'est exactement ce que le OU des deux politiques
+# accordait.
+#
+# Un abonné qui n'est PAS du groupe — `G_OUT` en est membre depuis la
+# vérification de l'ajout par le propriétaire, et aurait donc validé ce test
+# pour la mauvaise raison.
+G_FOLLOWER=$(q "INSERT INTO auth.users (id) VALUES (gen_random_uuid()) RETURNING id")
+q "INSERT INTO follows (follower_id, following_id) VALUES ('$G_FOLLOWER','$G_OWNER') ON CONFLICT DO NOTHING" >/dev/null 2>&1
+check "l'abonné voit bien les anecdotes hors groupe" "1" \
+  "$(as authenticated "$G_FOLLOWER" "SELECT count(*) FROM voice_posts WHERE id='$FRIENDS_POST';" 2>/dev/null)"
+check "suivre l'auteur n'ouvre pas ses anecdotes de groupe" "0" \
+  "$(as authenticated "$G_FOLLOWER" "SELECT count(*) FROM voice_posts WHERE id='$G_POST';" 2>/dev/null)"
 
 echo
 if [ "$failures" -eq 0 ]; then
