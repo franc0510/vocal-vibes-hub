@@ -28,6 +28,9 @@ export default defineConfig({
       "src/**/*.{test,spec}.{ts,tsx}",
       "supabase/functions/**/*.{test,spec}.ts",
       "scripts/**/*.{test,spec}.ts",
+      // Les fonctions serveur de Vercel : l'aperçu des liens de partage n'a
+      // pas d'autre filet, personne ne le voit avant qu'il ne soit parti.
+      "api/**/*.{test,spec}.ts",
     ],
   },
   resolve: {
